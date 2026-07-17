@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Four EQ-style slider tracks with handles at varying heights. -->
+    <path android:fillColor="#3A3F4B" android:pathData="M32,30 L32,78" android:strokeWidth="6" android:strokeColor="#3A3F4B" />
+    <path android:fillColor="#3A3F4B" android:pathData="M48,30 L48,78" android:strokeWidth="6" android:strokeColor="#3A3F4B" />
+    <path android:fillColor="#3A3F4B" android:pathData="M64,30 L64,78" android:strokeWidth="6" android:strokeColor="#3A3F4B" />
+    <path android:fillColor="#3A3F4B" android:pathData="M80,30 L80,78" android:strokeWidth="6" android:strokeColor="#3A3F4B" />
+    <path android:fillColor="#4FD1C5" android:pathData="M26,58 h12 v8 h-12 z" />
+    <path android:fillColor="#4FD1C5" android:pathData="M42,38 h12 v8 h-12 z" />
+    <path android:fillColor="#4FD1C5" android:pathData="M58,66 h12 v8 h-12 z" />
+    <path android:fillColor="#4FD1C5" android:pathData="M74,48 h12 v8 h-12 z" />
+</vector>
