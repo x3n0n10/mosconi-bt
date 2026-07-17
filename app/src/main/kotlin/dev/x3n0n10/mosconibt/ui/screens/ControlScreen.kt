@@ -1,6 +1,8 @@
 package dev.x3n0n10.mosconibt.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,7 +10,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -23,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.x3n0n10.mosconibt.ControlUiState
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
@@ -35,8 +41,8 @@ fun ControlScreen(
     onVolumeChange: (Int) -> Unit,
     onVolumeTargetChange: (MosconiProtocol.VolumeTarget) -> Unit,
     onSubChange: (Int) -> Unit,
-    onGeoXChange: (Int) -> Unit,
-    onGeoYChange: (Int) -> Unit,
+    onBalanceChange: (Int) -> Unit,
+    onFaderChange: (Int) -> Unit,
     onTrebleChange: (Int) -> Unit,
     onMidChange: (Int) -> Unit,
     onBassChange: (Int) -> Unit,
@@ -50,6 +56,9 @@ fun ControlScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         ) {
+            SyncStatusRow(lastSyncedAtMillis = state.lastSyncedAtMillis)
+            Spacer(Modifier.height(16.dp))
+
             SectionLabel("Presets")
             PresetRow(selected = state.selectedPreset, onPresetSelected = onPresetSelected)
 
@@ -83,23 +92,18 @@ fun ControlScreen(
             )
 
             Spacer(Modifier.height(28.dp))
-            SectionLabel("Listening position")
-            Text(
-                "Adjusts time alignment for where you sit in the car.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            SectionLabel("Balance / Fader")
+            LabeledSlider(
+                label = "Balance (left ↔ right)",
+                value = state.balance,
+                valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
+                onValueChange = onBalanceChange,
             )
             LabeledSlider(
-                label = "Left ↔ Right",
-                value = state.geoX,
-                valueRange = 0..MosconiProtocol.GEO_STEPS,
-                onValueChange = onGeoXChange,
-            )
-            LabeledSlider(
-                label = "Front ↔ Rear",
-                value = state.geoY,
-                valueRange = 0..MosconiProtocol.GEO_STEPS,
-                onValueChange = onGeoYChange,
+                label = "Fader (front ↔ rear)",
+                value = state.fader,
+                valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
+                onValueChange = onFaderChange,
             )
 
             Spacer(Modifier.height(28.dp))
@@ -141,6 +145,27 @@ fun ControlScreen(
                 Switch(checked = state.hapticFeedback, onCheckedChange = onHapticToggle)
             }
         }
+    }
+}
+
+@Composable
+private fun SyncStatusRow(lastSyncedAtMillis: Long?) {
+    val synced = lastSyncedAtMillis != null
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(
+                    color = if (synced) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline,
+                    shape = CircleShape,
+                ),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (synced) "Synced with device" else "Reading current settings…",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

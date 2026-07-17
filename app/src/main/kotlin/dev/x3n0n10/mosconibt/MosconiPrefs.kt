@@ -21,8 +21,8 @@ class MosconiPrefs(context: Context) {
 
     var volumeStep: Int by IntPref(KEY_VOLUME_STEP, MosconiProtocol.VOLUME_STEPS / 2)
     var subLevel: Int by IntPref(KEY_SUB, MosconiProtocol.SUB_STEPS)
-    var geoX: Int by IntPref(KEY_GEO_X, MosconiProtocol.GEO_STEPS / 2)
-    var geoY: Int by IntPref(KEY_GEO_Y, MosconiProtocol.GEO_STEPS / 2)
+    var balance: Int by IntPref(KEY_BALANCE, MosconiProtocol.BALANCE_FADER_STEPS / 2)
+    var fader: Int by IntPref(KEY_FADER, MosconiProtocol.BALANCE_FADER_STEPS / 2)
     var treble: Int by IntPref(KEY_TREBLE, 8)
     var mid: Int by IntPref(KEY_MID, 8)
     var bass: Int by IntPref(KEY_BASS, 8)
@@ -45,8 +45,8 @@ class MosconiPrefs(context: Context) {
         const val KEY_VOLUME_IS_INPUT = "volume_is_input"
         const val KEY_VOLUME_STEP = "volume_step"
         const val KEY_SUB = "sub"
-        const val KEY_GEO_X = "geo_x"
-        const val KEY_GEO_Y = "geo_y"
+        const val KEY_BALANCE = "geo_x"
+        const val KEY_FADER = "geo_y"
         const val KEY_TREBLE = "treble"
         const val KEY_MID = "mid"
         const val KEY_BASS = "bass"

@@ -11,9 +11,12 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** A paired device, trimmed down to what the UI actually needs. */
@@ -34,6 +37,10 @@ sealed interface BtConnectionState {
  * `BLUETOOTH_CONNECT` (Android 12+/API 31+) to already be granted; callers are expected to
  * have checked that via the UI layer first, matching how the rest of this codebase treats
  * runtime permissions as a UI concern, not a transport concern.
+ *
+ * There's exactly one RFCOMM socket, so writes (from slider drags) and status reads (from
+ * polling) share one input/output stream pair. [ioMutex] serializes every transaction so a
+ * status response's bytes can never be misread as a write's ack byte or vice versa.
  */
 class ClassicBluetoothManager(context: Context) {
 
@@ -43,6 +50,7 @@ class ClassicBluetoothManager(context: Context) {
     private var socket: android.bluetooth.BluetoothSocket? = null
     private var output: OutputStream? = null
     private var input: InputStream? = null
+    private val ioMutex = Mutex()
 
     private val _state = MutableStateFlow<BtConnectionState>(BtConnectionState.Idle)
     val state: StateFlow<BtConnectionState> = _state.asStateFlow()
@@ -82,31 +90,77 @@ class ClassicBluetoothManager(context: Context) {
     }
 
     /**
-     * Sends one 8-byte command frame and, matching the factory app's behaviour, makes a
-     * best-effort attempt to drain the single ack byte the DSP replies with. The ack's
+     * Sends one 8-byte write-command frame and, matching the factory app's behaviour, makes
+     * a best-effort attempt to drain the single ack byte the DSP replies with. The ack's
      * content is never validated - the original app didn't either - it's just cleared so
      * it doesn't pile up in the receive buffer.
      */
     suspend fun send(frame: ByteArray) = withContext(Dispatchers.IO) {
-        val out = output ?: return@withContext
-        try {
-            out.write(frame)
-            out.flush()
-            drainAck()
-        } catch (e: IOException) {
-            val failedDevice = (_state.value as? BtConnectionState.Connected)?.device
-            closeQuietly()
-            _state.value = BtConnectionState.Failed(failedDevice, e.message ?: "Write failed")
+        ioMutex.withLock {
+            val out = output ?: return@withLock
+            try {
+                out.write(frame)
+                out.flush()
+                readAvailable(maxBytes = 1, timeoutMs = 50)
+            } catch (e: IOException) {
+                failConnection(e.message ?: "Write failed")
+            }
         }
     }
 
-    private fun drainAck() {
-        try {
-            val inp = input ?: return
-            if (inp.available() > 0) inp.read()
-        } catch (_: IOException) {
-            // Best-effort only; a failed read here doesn't invalidate the write that just succeeded.
+    /**
+     * Sends a frame and blocks (with [timeoutMs]) for exactly [responseSize] bytes back -
+     * used for status-query frames, which get a structured, checksummed reply rather than
+     * a single ack byte. Returns null on timeout, a closed connection, or any I/O error.
+     */
+    suspend fun sendAndReceive(frame: ByteArray, responseSize: Int, timeoutMs: Long = 500): ByteArray? =
+        withContext(Dispatchers.IO) {
+            ioMutex.withLock {
+                val out = output ?: return@withLock null
+                try {
+                    out.write(frame)
+                    out.flush()
+                    readExact(responseSize, timeoutMs)
+                } catch (e: IOException) {
+                    failConnection(e.message ?: "Read failed")
+                    null
+                }
+            }
         }
+
+    /** Polls (non-blocking, coroutine-friendly) until [maxBytes] bytes arrive or [timeoutMs] elapses. */
+    private suspend fun readAvailable(maxBytes: Int, timeoutMs: Long): ByteArray? =
+        readUpTo(maxBytes, timeoutMs, exact = false)
+
+    /** Polls until exactly [length] bytes arrive, or returns null if [timeoutMs] elapses first. */
+    private suspend fun readExact(length: Int, timeoutMs: Long): ByteArray? =
+        readUpTo(length, timeoutMs, exact = true)
+
+    private suspend fun readUpTo(length: Int, timeoutMs: Long, exact: Boolean): ByteArray? {
+        val inp = input ?: return null
+        val buffer = ByteArray(length)
+        var filled = 0
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (filled < length) {
+            if (System.currentTimeMillis() > deadline) {
+                return if (exact) null else buffer.copyOf(filled).takeIf { filled > 0 }
+            }
+            val avail = inp.available()
+            if (avail > 0) {
+                val n = inp.read(buffer, filled, minOf(avail, length - filled))
+                if (n < 0) return null // stream closed
+                filled += n
+            } else {
+                delay(10)
+            }
+        }
+        return buffer
+    }
+
+    private fun failConnection(message: String) {
+        val failedDevice = (_state.value as? BtConnectionState.Connected)?.device
+        closeQuietly()
+        _state.value = BtConnectionState.Failed(failedDevice, message)
     }
 
     fun disconnect() {

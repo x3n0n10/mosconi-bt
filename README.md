@@ -3,15 +3,21 @@
 An unofficial, modern replacement for MOSCONI's "Mos_DSP_control_App" — the Android app
 used to control MOSCONI PICO-series car-audio DSPs (tested against a PICO V2 6|8) over
 Bluetooth. Native Kotlin + Jetpack Compose, Material 3 sliders instead of drag-image
-controls, and support for any screen size (including split-screen and unusually
-wide/short displays).
+controls, support for any screen size (including split-screen and unusually wide/short
+displays), and — unlike the factory app — it actually **reads the DSP's live state**,
+so it stays in sync with a physical volume/sub-level knob or another controller
+instead of just blindly overwriting whatever's on the device.
 
 ## Why this exists
 
-The factory app hasn't been updated in years and its UI (drag-and-drop image sliders)
-is unpleasant to use. MOSCONI doesn't publish the Bluetooth protocol, so this project
-reverse-engineered it by decompiling the factory APK — see [PROTOCOL.md](PROTOCOL.md)
-for the full writeup, including which parts are verified vs. still assumptions.
+The factory app hasn't been updated in years, its UI (drag-and-drop image sliders) is
+unpleasant to use, and it can't read anything back from the DSP — if you have a
+physical knob wired up, the app has no idea what it's set to until you touch every
+slider yourself. MOSCONI doesn't publish the Bluetooth protocol, so this project
+reverse-engineered it by decompiling both the factory Android app (for the write side)
+and the official Windows tuning GUI (for the read side, which the Android app never
+had). See [PROTOCOL.md](PROTOCOL.md) for the full writeup, including which parts are
+verified vs. still assumptions.
 
 ## Screenshots
 
@@ -65,13 +71,15 @@ Open the project root in Android Studio (Koala or newer) and it will pick up bot
 modules automatically. `:app` needs `compileSdk 34` / a recent Android SDK installed
 via Android Studio's SDK Manager.
 
-> **Build status:** both `./gradlew :protocol:test` and `./gradlew :app:assembleDebug`
-> have been run end-to-end against a real Android SDK (platform 34 / build-tools 34.0.0)
-> and succeed — the resulting `app-debug.apk` was inspected with `aapt dump badging` to
-> confirm the package name, permissions, and min/target SDK. It has **not** been
-> installed on a device or connected to real hardware yet, so functional behavior
-> (pairing, sending commands, the two flagged protocol assumptions below) is still
-> unverified.
+> **Build status:** `./gradlew :protocol:test`, `./gradlew :app:assembleDebug`, and
+> `./gradlew :app:verifyPaparazziDebug` have all been run end-to-end against a real
+> Android SDK (platform 34 / build-tools 34.0.0) and pass — including the CRC-8
+> implementation against its standard reference check value, and the resulting
+> `app-debug.apk` inspected with `aapt dump badging` to confirm the package name,
+> permissions, and min/target SDK. It has **not** been installed on a device or
+> connected to real hardware yet, so functional behavior (pairing, sending commands,
+> the actual over-the-air status-poll round trip, and the flagged protocol assumptions
+> above) is still unverified.
 
 ## Setting up the DSP
 
@@ -82,23 +90,24 @@ via Android Studio's SDK Manager.
 
 ## Known unknowns — verify against real hardware
 
-Static analysis of the decompiled app tells you *what bytes get sent*, not which
-physical control position the original UI author intended for "loud" vs "quiet." Two
-things are flagged in `MosconiProtocol.kt` as assumptions to check the first time you
-use this against a real unit:
-
-- **Volume slider direction** — whether the low end of the slider should be quiet or
-  loud (i.e. whether `LOG_VOLUME_TABLE` needs reversing).
-- **"Listening position" (Geo) axis orientation** — which edge is left/right and
-  front/rear.
-
-Both are one-line fixes (see the comments in `MosconiProtocol.kt`) once you've
-confirmed the actual behavior on your DSP.
+Static analysis of the decompiled apps tells you *what bytes get sent/parsed*, not
+everything about how the DSP behaves. A few things are flagged in `MosconiProtocol.kt`
+as assumptions to check the first time you use this against a real unit — see
+[PROTOCOL.md § Confidence & open questions](PROTOCOL.md#confidence--open-questions)
+for the current list (volume slider direction, and whether the status response's
+"page toggle" bit truly alternates on its own). All are one-line fixes once confirmed.
 
 ## Contributing back
 
+The current feature set covers what both the Android app (write) and the Windows GUI
+(read) exposed for: output/input volume, sub level, balance/fader, 4 presets, and
+treble/mid/bass. The Windows GUI's own memory-mapped bulk-read mechanism
+(`USERDATA_LOAD`, see PROTOCOL.md) covers a lot more than that — crossovers, a
+per-channel mixer matrix, effects, time alignment, etc. — none of which this app reads
+or writes. If you want one of those and can help pin down its exact byte offset/format
+(either from further static analysis or a live capture), please open an issue/PR.
+
 If you capture a Bluetooth HCI snoop log (Android Developer Options → "Enable
-Bluetooth HCI snoop log") while operating the *factory* app and it reveals commands
-this app doesn't cover yet (firmware updates, additional DSP features, etc.), please
-open an issue/PR — the current feature set only covers what `Screen1.smali` exposed:
-output/input volume, sub level, listening position X/Y, 4 presets, and treble/mid/bass.
+Bluetooth HCI snoop log") while operating either official app, or a serial capture of
+the Windows GUI talking over USB, and it reveals something this app gets wrong, that's
+exactly the kind of ground-truth this project is missing — please share it.
