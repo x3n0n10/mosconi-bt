@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.x3n0n10.mosconibt.bluetooth.BtConnectionState
@@ -64,11 +68,34 @@ fun MosconiApp(viewModel: MosconiViewModel = viewModel()) {
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         hasPermission = granted
-        if (granted) viewModel.refreshPairedDevices()
+        if (granted) {
+            viewModel.refreshPairedDevices()
+            viewModel.maybeAutoConnect()
+        }
     }
 
     LaunchedEffect(hasPermission) {
-        if (hasPermission) viewModel.refreshPairedDevices()
+        if (hasPermission) {
+            viewModel.refreshPairedDevices()
+            viewModel.maybeAutoConnect()
+        }
+    }
+
+    // Tear down the serial session (and its polling) the moment the app isn't visible,
+    // and re-attempt auto-connect to the last device each time it comes back - matching
+    // the factory app rather than holding the DSP's Bluetooth module open in the
+    // background for a screen nobody's looking at.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.onAppForegrounded()
+                Lifecycle.Event.ON_STOP -> viewModel.onAppBackgrounded()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -105,12 +132,14 @@ fun MosconiApp(viewModel: MosconiViewModel = viewModel()) {
                 ConnectScreen(
                     devices = ui.pairedDevices,
                     connectionState = ui.connection,
+                    isAutoConnecting = ui.isAutoConnecting,
                     hasBluetoothPermission = hasPermission,
                     bluetoothAvailable = viewModel.isBluetoothAvailable,
                     bluetoothEnabled = viewModel.isBluetoothEnabled,
                     onRequestPermission = { permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) },
                     onRefresh = { viewModel.refreshPairedDevices() },
                     onConnect = { viewModel.connect(it) },
+                    onCancelAutoConnect = { viewModel.cancelAutoConnect() },
                 )
             }
         }

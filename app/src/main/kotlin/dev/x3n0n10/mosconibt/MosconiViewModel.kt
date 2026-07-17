@@ -24,6 +24,10 @@ import kotlinx.coroutines.launch
 data class ControlUiState(
     val connection: BtConnectionState = BtConnectionState.Idle,
     val pairedDevices: List<BtDevice> = emptyList(),
+    /** True while [connection] is [BtConnectionState.Connecting] as a result of
+     *  auto-connecting to the last-used device, as opposed to a device the user just
+     *  tapped - lets the UI offer a way to cancel it, unlike a manual connect attempt. */
+    val isAutoConnecting: Boolean = false,
     val volumeTarget: MosconiProtocol.VolumeTarget = MosconiProtocol.VolumeTarget.OUTPUT,
     val volumeStep: Int = MosconiProtocol.VOLUME_STEPS / 2,
     val subLevel: Int = MosconiProtocol.SUB_STEPS,
@@ -57,6 +61,13 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
     private var pollJob: Job? = null
     private var lastStatusByte: Int = 0
 
+    private var connectJob: Job? = null
+
+    /** Auto-connect is attempted at most once per foreground session (see
+     *  [onAppForegrounded]) - once the user cancels it, or connects/switches manually,
+     *  it should stay out of the way until the app is reopened, not keep retrying. */
+    private var autoConnectSuppressed = false
+
     private val _ui = MutableStateFlow(
         ControlUiState(
             volumeTarget = prefs.volumeTarget,
@@ -83,7 +94,14 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             bluetooth.state.collect { connection ->
-                _ui.update { it.copy(connection = connection) }
+                _ui.update {
+                    it.copy(
+                        connection = connection,
+                        // Only meaningful while still connecting; anything else (idle,
+                        // connected, failed) means this attempt is resolved.
+                        isAutoConnecting = connection is BtConnectionState.Connecting && it.isAutoConnecting,
+                    )
+                }
                 if (connection is BtConnectionState.Connected) {
                     startPolling()
                 } else {
@@ -91,6 +109,45 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+    }
+
+    /**
+     * Mirrors the factory app: try to reconnect to whatever device was last used,
+     * without making the user pick it again every time. Runs at most once per
+     * foreground session and only when nothing else is already connecting/connected,
+     * so it never fights a manual pick or a cancel. Safe to call before Bluetooth
+     * permission is granted - [ClassicBluetoothManager.bondedDevices] just returns
+     * nothing in that case, so this quietly no-ops rather than crashing.
+     */
+    fun maybeAutoConnect() {
+        if (autoConnectSuppressed) return
+        if (_ui.value.connection !is BtConnectionState.Idle) return
+        val lastAddress = prefs.lastDeviceAddress ?: return
+        val device = bluetooth.bondedDevices().firstOrNull { it.address == lastAddress } ?: return
+        connect(device, automatic = true)
+    }
+
+    /** Cancels a pending auto-connect and returns to the device picker, untouched. */
+    fun cancelAutoConnect() {
+        connectJob?.cancel()
+        bluetooth.disconnect()
+        _ui.update { it.copy(isAutoConnecting = false) }
+    }
+
+    /** Call when the app becomes visible again: re-arms auto-connect for this session
+     *  and retries it immediately (covers both "just launched" and "switched back from
+     *  another app"). */
+    fun onAppForegrounded() {
+        autoConnectSuppressed = false
+        refreshPairedDevices()
+        maybeAutoConnect()
+    }
+
+    /** Call when the app is no longer visible: tear down the serial session (and the
+     *  polling that rides on it) rather than holding the DSP's Bluetooth module busy
+     *  and draining battery for a screen nobody's looking at. */
+    fun onAppBackgrounded() {
+        disconnect()
     }
 
     /**
@@ -191,18 +248,23 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         _ui.update { it.copy(pairedDevices = bluetooth.bondedDevices()) }
     }
 
-    fun connect(device: BtDevice) {
+    fun connect(device: BtDevice, automatic: Boolean = false) {
+        // Any explicit attempt - auto or manual - claims this foreground session; a
+        // manual pick in particular must never be overridden by a stale auto-retry.
+        autoConnectSuppressed = true
+        connectJob?.cancel()
         prefs.lastDeviceAddress = device.address
         // Neither is valid for a new connection: nothing's been synced yet, and any
         // earlier edit belonged to a previous session's (possibly different) device.
-        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null) }
-        viewModelScope.launch { bluetooth.connect(device) }
+        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null, isAutoConnecting = automatic) }
+        connectJob = viewModelScope.launch { bluetooth.connect(device) }
     }
 
     fun disconnect() {
+        connectJob?.cancel()
         stopPolling()
         bluetooth.disconnect()
-        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null) }
+        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null, isAutoConnecting = false) }
     }
 
     fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {

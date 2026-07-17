@@ -56,12 +56,14 @@ class ScreenshotTest {
                 ConnectScreen(
                     devices = sampleDevices,
                     connectionState = BtConnectionState.Idle,
+                    isAutoConnecting = false,
                     hasBluetoothPermission = true,
                     bluetoothAvailable = true,
                     bluetoothEnabled = true,
                     onRequestPermission = {},
                     onRefresh = {},
                     onConnect = {},
+                    onCancelAutoConnect = {},
                 )
             }
         }
@@ -74,12 +76,34 @@ class ScreenshotTest {
                 ConnectScreen(
                     devices = emptyList(),
                     connectionState = BtConnectionState.Idle,
+                    isAutoConnecting = false,
                     hasBluetoothPermission = false,
                     bluetoothAvailable = true,
                     bluetoothEnabled = true,
                     onRequestPermission = {},
                     onRefresh = {},
                     onConnect = {},
+                    onCancelAutoConnect = {},
+                )
+            }
+        }
+    }
+
+    @Test
+    fun connectScreen_autoConnecting() {
+        paparazzi.snapshot {
+            AppRoot {
+                ConnectScreen(
+                    devices = sampleDevices,
+                    connectionState = BtConnectionState.Connecting(sampleDevices[0]),
+                    isAutoConnecting = true,
+                    hasBluetoothPermission = true,
+                    bluetoothAvailable = true,
+                    bluetoothEnabled = true,
+                    onRequestPermission = {},
+                    onRefresh = {},
+                    onConnect = {},
+                    onCancelAutoConnect = {},
                 )
             }
         }

@@ -1,10 +1,13 @@
 package dev.x3n0n10.mosconibt.bluetooth
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import java.io.IOException
 import java.io.InputStream
@@ -47,10 +50,17 @@ class ClassicBluetoothManager(context: Context) {
     private val adapter: BluetoothAdapter? =
         (context.applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
+    private val appContext = context.applicationContext
+
     private var socket: android.bluetooth.BluetoothSocket? = null
     private var output: OutputStream? = null
     private var input: InputStream? = null
     private val ioMutex = Mutex()
+
+    /** Bumped on every [connect]/[disconnect] call so a superseded attempt (cancelled,
+     *  or overtaken by a newer connect to a different device) can tell it's stale after
+     *  its blocking socket call returns/throws, and skip clobbering newer state. */
+    private var connectAttemptId = 0
 
     private val _state = MutableStateFlow<BtConnectionState>(BtConnectionState.Idle)
     val state: StateFlow<BtConnectionState> = _state.asStateFlow()
@@ -58,8 +68,13 @@ class ClassicBluetoothManager(context: Context) {
     val isBluetoothAvailable: Boolean get() = adapter != null
     val isBluetoothEnabled: Boolean get() = adapter?.isEnabled == true
 
+    private val hasConnectPermission: Boolean
+        get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            appContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+
     @SuppressLint("MissingPermission")
     fun bondedDevices(): List<BtDevice> {
+        if (!hasConnectPermission) return emptyList()
         val devices = adapter?.bondedDevices.orEmpty()
         return devices
             .map { BtDevice(name = it.name ?: it.address, address = it.address) }
@@ -68,24 +83,36 @@ class ClassicBluetoothManager(context: Context) {
 
     @SuppressLint("MissingPermission")
     suspend fun connect(target: BtDevice) = withContext(Dispatchers.IO) {
+        val attemptId = ++connectAttemptId
+        closeQuietly() // abandon any previous in-flight/stale socket before starting fresh
         _state.value = BtConnectionState.Connecting(target)
         val currentAdapter = adapter
         val device: BluetoothDevice? = currentAdapter?.bondedDevices?.firstOrNull { it.address == target.address }
         if (currentAdapter == null || device == null) {
-            _state.value = BtConnectionState.Failed(target, "Device is no longer paired")
+            if (attemptId == connectAttemptId) _state.value = BtConnectionState.Failed(target, "Device is no longer paired")
             return@withContext
         }
         try {
             currentAdapter.cancelDiscovery()
             val sock = device.createRfcommSocketToServiceRecord(UUID.fromString(MosconiProtocol.SPP_UUID))
-            sock.connect()
+            // Assigned before connect() returns so a concurrent cancel/disconnect can close
+            // (and thereby interrupt) this specific socket while it's still blocking.
             socket = sock
+            sock.connect()
+            if (attemptId != connectAttemptId) {
+                // A newer attempt (cancel, or a switch to a different device) already took
+                // over while we were blocked in connect() - discard this one quietly.
+                runCatching { sock.close() }
+                return@withContext
+            }
             output = sock.outputStream
             input = sock.inputStream
             _state.value = BtConnectionState.Connected(target)
         } catch (e: IOException) {
-            closeQuietly()
-            _state.value = BtConnectionState.Failed(target, e.message ?: "Connection failed")
+            if (attemptId == connectAttemptId) {
+                closeQuietly()
+                _state.value = BtConnectionState.Failed(target, e.message ?: "Connection failed")
+            }
         }
     }
 
@@ -164,6 +191,7 @@ class ClassicBluetoothManager(context: Context) {
     }
 
     fun disconnect() {
+        connectAttemptId++ // invalidate any in-flight connect attempt
         closeQuietly()
         _state.value = BtConnectionState.Idle
     }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -33,12 +35,14 @@ import dev.x3n0n10.mosconibt.ui.ResponsiveContent
 fun ConnectScreen(
     devices: List<BtDevice>,
     connectionState: BtConnectionState,
+    isAutoConnecting: Boolean,
     hasBluetoothPermission: Boolean,
     bluetoothAvailable: Boolean,
     bluetoothEnabled: Boolean,
     onRequestPermission: () -> Unit,
     onRefresh: () -> Unit,
     onConnect: (BtDevice) -> Unit,
+    onCancelAutoConnect: () -> Unit,
 ) {
     ResponsiveContent {
         Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
@@ -72,6 +76,14 @@ fun ConnectScreen(
                 )
 
                 else -> {
+                    val autoConnectingDevice = (connectionState as? BtConnectionState.Connecting)
+                        ?.device
+                        ?.takeIf { isAutoConnecting }
+                    if (autoConnectingDevice != null) {
+                        AutoConnectBanner(deviceName = autoConnectingDevice.name, onCancel = onCancelAutoConnect)
+                        Spacer(Modifier.height(16.dp))
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -126,6 +138,28 @@ fun ConnectScreen(
                 }
             }
         }
+    }
+}
+
+/** Shown in place of (well, on top of) the plain device list while auto-connecting to
+ *  the last-used device, so the user isn't just staring at a "Connecting…" button with
+ *  no way out - they can either wait, cancel, or tap a different paired device below. */
+@Composable
+private fun AutoConnectBanner(deviceName: String, onCancel: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Connecting automatically…", style = MaterialTheme.typography.bodyLarge)
+                Text(deviceName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        OutlinedButton(onClick = onCancel) { Text("Cancel") }
     }
 }
 

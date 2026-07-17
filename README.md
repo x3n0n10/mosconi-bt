@@ -95,6 +95,13 @@ via Android Studio's SDK Manager.
 2. Open the app, grant the Bluetooth permission when asked, and tap the paired device
    to connect.
 
+From then on, opening the app auto-connects to that same device, so you don't have to
+pick it every time — tap **Cancel** on the "Connecting automatically…" banner if you'd
+rather stop and pick a different one instead. The serial (RFCOMM) session, and the
+1-second status polling that rides on it, is torn down the moment the app leaves the
+foreground (backgrounded, screen off, task-switched away) and re-established when you
+come back — it doesn't sit connected to the DSP in the background.
+
 ## Known unknowns — verify against real hardware
 
 Static analysis of the decompiled apps tells you *what bytes get sent/parsed*, not
