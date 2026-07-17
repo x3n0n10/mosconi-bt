@@ -13,6 +13,20 @@ is unpleasant to use. MOSCONI doesn't publish the Bluetooth protocol, so this pr
 reverse-engineered it by decompiling the factory APK — see [PROTOCOL.md](PROTOCOL.md)
 for the full writeup, including which parts are verified vs. still assumptions.
 
+## Screenshots
+
+Real renders of the actual Compose UI (via [Paparazzi](https://github.com/cashapp/paparazzi),
+not mockups) — see [Screenshots](#regenerating-screenshots) below for how to reproduce/update these.
+
+| Connect | Control (light) | Control (dark) |
+|---|---|---|
+| ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_connectScreen_withPairedDevices.png) | ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_controlScreen_lightTheme.png) | ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_controlScreen_darkTheme.png) |
+
+On an unusually wide/short screen (e.g. a fixed car head unit), content width is capped to
+the screen height instead of stretching sliders edge-to-edge:
+
+![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTestWideScreen_controlScreen_ultraWideScreen_widthIsCappedToHeight.png)
+
 ## Project layout
 
 - **`:protocol`** — pure Kotlin/JVM module with no Android dependency. Contains
@@ -20,14 +34,32 @@ for the full writeup, including which parts are verified vs. still assumptions.
   app, plus unit tests. Buildable and testable with plain Gradle + Maven Central; no
   Android SDK required.
 - **`:app`** — the Android application: Compose UI, classic-Bluetooth (RFCOMM/SPP)
-  transport, and a small ViewModel wiring the two together.
+  transport, and a small ViewModel wiring the two together. Also has
+  [Paparazzi](https://github.com/cashapp/paparazzi) screenshot tests
+  (`app/src/test/kotlin/.../ScreenshotTest.kt`) that render key screens headlessly
+  (no emulator needed) and compare against the golden images above on every CI run.
 
 ## Building
 
 ```
-./gradlew :protocol:test   # pure-JVM protocol logic + tests, no Android SDK needed
-./gradlew :app:assembleDebug   # needs the Android SDK + Google's Maven repo
+./gradlew :protocol:test          # pure-JVM protocol logic + tests, no Android SDK needed
+./gradlew :app:assembleDebug      # needs the Android SDK + Google's Maven repo
+./gradlew :app:verifyPaparazziDebug   # screenshot regression tests, needs the Android SDK
 ```
+
+Every push and PR also runs in [GitHub Actions](.github/workflows/build.yml), which
+builds a debug APK you can download from the run's Artifacts tab without building
+locally at all.
+
+### Regenerating screenshots
+
+After a UI change, update the golden images with:
+
+```
+./gradlew :app:recordPaparazziDebug
+```
+
+and commit the changed PNGs under `app/src/test/snapshots/images/`.
 
 Open the project root in Android Studio (Koala or newer) and it will pick up both
 modules automatically. `:app` needs `compileSdk 34` / a recent Android SDK installed
