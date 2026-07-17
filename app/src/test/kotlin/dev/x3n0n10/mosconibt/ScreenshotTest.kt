@@ -126,6 +126,28 @@ class ScreenshotTest {
             }
         }
     }
+
+    @Test
+    fun controlScreen_notYetSynced_controlsAreDisabled() {
+        paparazzi.snapshot {
+            AppRoot {
+                ControlScreen(
+                    // lastSyncedAtMillis defaults to null: connected, but nothing read yet.
+                    state = sampleControlState.copy(lastSyncedAtMillis = null),
+                    onVolumeChange = {},
+                    onVolumeTargetChange = {},
+                    onSubChange = {},
+                    onBalanceChange = {},
+                    onFaderChange = {},
+                    onTrebleChange = {},
+                    onMidChange = {},
+                    onBassChange = {},
+                    onPresetSelected = {},
+                    onHapticToggle = {},
+                )
+            }
+        }
+    }
 }
 
 /** A separate rule instance with a wide/short "car head unit"-style screen. */

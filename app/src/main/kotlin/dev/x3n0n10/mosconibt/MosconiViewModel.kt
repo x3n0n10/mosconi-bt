@@ -36,8 +36,15 @@ data class ControlUiState(
     val hapticFeedback: Boolean = true,
     /** Wall-clock time of the last successfully parsed status read, or null if never. */
     val lastSyncedAtMillis: Long? = null,
+    /** Wall-clock time of the last local slider/button edit, or null if none this session. */
+    val lastLocalEditAtMillis: Long? = null,
 ) {
     val isConnected: Boolean get() = connection is BtConnectionState.Connected
+
+    /** Controls stay disabled until we know the DSP's real values - otherwise editing
+     *  would start from a guess (local prefs, or hardcoded defaults) and could silently
+     *  overwrite whatever the device actually had. */
+    val controlsReady: Boolean get() = lastSyncedAtMillis != null
 }
 
 class MosconiViewModel(application: Application) : AndroidViewModel(application) {
@@ -49,9 +56,6 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     private var pollJob: Job? = null
     private var lastStatusByte: Int = 0
-
-    /** Wall-clock time of the last local slider/button edit; polls briefly defer to it. */
-    private var lastLocalWriteAtMillis: Long = 0L
 
     private val _ui = MutableStateFlow(
         ControlUiState(
@@ -126,11 +130,16 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
     /**
      * Merges a live [MosconiProtocol.StatusResponse] into UI state and the write-side
      * [packetState] buffers (so the *next* local edit resends real values for the fields
-     * it doesn't touch, not stale ones). Skipped entirely for a short window after any
-     * local edit so an in-flight poll response can't yank a slider back mid-drag.
+     * it doesn't touch, not stale ones). Skipped entirely for [PAUSE_READS_AFTER_EDIT_MS]
+     * after any local edit - long enough to cover a whole drag gesture (every intermediate
+     * position re-triggers this window, so it keeps extending for as long as a finger is
+     * moving a slider) plus a settling margin, so an in-flight or newly-arriving poll
+     * response can't yank a slider back to the pre-edit value while - or right after - the
+     * user is choosing where they want it.
      */
     private fun applyStatusResponse(status: MosconiProtocol.StatusResponse) {
-        if (System.currentTimeMillis() - lastLocalWriteAtMillis < RECENT_LOCAL_WRITE_WINDOW_MS) return
+        val lastEdit = _ui.value.lastLocalEditAtMillis
+        if (lastEdit != null && System.currentTimeMillis() - lastEdit < PAUSE_READS_AFTER_EDIT_MS) return
 
         val volumeControls = status.page as? MosconiProtocol.InformationPage.VolumeControls
         val tone = status.page as? MosconiProtocol.InformationPage.Tone
@@ -184,14 +193,16 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     fun connect(device: BtDevice) {
         prefs.lastDeviceAddress = device.address
-        _ui.update { it.copy(lastSyncedAtMillis = null) } // this connection hasn't synced anything yet
+        // Neither is valid for a new connection: nothing's been synced yet, and any
+        // earlier edit belonged to a previous session's (possibly different) device.
+        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null) }
         viewModelScope.launch { bluetooth.connect(device) }
     }
 
     fun disconnect() {
         stopPolling()
         bluetooth.disconnect()
-        _ui.update { it.copy(lastSyncedAtMillis = null) }
+        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null) }
     }
 
     fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {
@@ -278,7 +289,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     private fun send(frame: IntArray) {
         if (!_ui.value.isConnected) return
-        lastLocalWriteAtMillis = System.currentTimeMillis()
+        _ui.update { it.copy(lastLocalEditAtMillis = System.currentTimeMillis()) }
         viewModelScope.launch { bluetooth.send(frame.toByteArray()) }
     }
 
@@ -295,8 +306,10 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private companion object {
-        /** How long a poll-derived update is suppressed after a local edit, to avoid
-         *  a slow-to-arrive status response yanking a slider mid-drag. */
-        const val RECENT_LOCAL_WRITE_WINDOW_MS = 800L
+        /** How long poll-derived updates are suppressed after a local edit. Deliberately a
+         *  few seconds, not a few hundred milliseconds: this needs to comfortably outlast
+         *  the DSP's own processing + our poll's round trip, or a read could land in the
+         *  gap and revert the very value the user just set. */
+        const val PAUSE_READS_AFTER_EDIT_MS = 3000L
     }
 }

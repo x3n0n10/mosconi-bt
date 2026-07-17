@@ -24,9 +24,16 @@ verified vs. still assumptions.
 Real renders of the actual Compose UI (via [Paparazzi](https://github.com/cashapp/paparazzi),
 not mockups) — see [Screenshots](#regenerating-screenshots) below for how to reproduce/update these.
 
-| Connect | Control (light) | Control (dark) |
-|---|---|---|
-| ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_connectScreen_withPairedDevices.png) | ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_controlScreen_lightTheme.png) | ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_controlScreen_darkTheme.png) |
+| Connect | Control (light) | Control (dark) | Control (read-only, before first sync) |
+|---|---|---|---|
+| ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_connectScreen_withPairedDevices.png) | ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_controlScreen_lightTheme.png) | ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_controlScreen_darkTheme.png) | ![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTest_controlScreen_notYetSynced_controlsAreDisabled.png) |
+
+Controls stay disabled (and read-only) from the moment you connect until the app has
+successfully read the DSP's real values at least once — editing before that would mean
+guessing from restored preferences or hardcoded defaults, and could silently overwrite
+whatever the device actually had. Once synced, editing a control pauses applying new
+reads for a few seconds (extended for as long as you keep dragging), so an in-flight
+poll response can't yank a slider back to the old value mid-adjustment.
 
 On an unusually wide/short screen (e.g. a fixed car head unit), content width is capped to
 the screen height instead of stretching sliders edge-to-edge:

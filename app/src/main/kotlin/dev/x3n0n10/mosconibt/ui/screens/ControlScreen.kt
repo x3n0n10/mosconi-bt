@@ -35,10 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import dev.x3n0n10.mosconibt.ControlUiState
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.ResponsiveContent
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +55,12 @@ fun ControlScreen(
     onPresetSelected: (Int) -> Unit,
     onHapticToggle: (Boolean) -> Unit,
 ) {
+    // DSP-affecting controls stay disabled until the app actually knows the device's real
+    // values - editing before that would start from a guess (restored prefs, or hardcoded
+    // defaults) and could silently overwrite whatever the device was really set to. The
+    // haptic-feedback switch below is local-only and isn't gated by this.
+    val controlsEnabled = state.controlsReady
+
     ResponsiveContent {
         Column(
             modifier = Modifier
@@ -62,11 +68,14 @@ fun ControlScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         ) {
-            SyncStatusRow(lastSyncedAtMillis = state.lastSyncedAtMillis)
+            SyncStatusRow(
+                lastSyncedAtMillis = state.lastSyncedAtMillis,
+                lastLocalEditAtMillis = state.lastLocalEditAtMillis,
+            )
             Spacer(Modifier.height(16.dp))
 
             SectionLabel("Presets")
-            PresetRow(selected = state.selectedPreset, onPresetSelected = onPresetSelected)
+            PresetRow(selected = state.selectedPreset, enabled = controlsEnabled, onPresetSelected = onPresetSelected)
 
             Spacer(Modifier.height(28.dp))
             SectionLabel("Volume")
@@ -75,6 +84,7 @@ fun ControlScreen(
                     SegmentedButton(
                         selected = state.volumeTarget == target,
                         onClick = { onVolumeTargetChange(target) },
+                        enabled = controlsEnabled,
                         shape = SegmentedButtonDefaults.itemShape(index, MosconiProtocol.VolumeTarget.entries.size),
                     ) {
                         Text(if (target == MosconiProtocol.VolumeTarget.OUTPUT) "Output" else "Input")
@@ -85,6 +95,7 @@ fun ControlScreen(
                 label = if (state.volumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) "Output volume" else "Input volume",
                 value = state.volumeStep,
                 valueRange = 0..MosconiProtocol.VOLUME_STEPS,
+                enabled = controlsEnabled,
                 onValueChange = onVolumeChange,
             )
 
@@ -94,6 +105,7 @@ fun ControlScreen(
                 label = "Sub level",
                 value = state.subLevel,
                 valueRange = 0..MosconiProtocol.SUB_STEPS,
+                enabled = controlsEnabled,
                 onValueChange = onSubChange,
             )
 
@@ -103,12 +115,14 @@ fun ControlScreen(
                 label = "Balance (left ↔ right)",
                 value = state.balance,
                 valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
+                enabled = controlsEnabled,
                 onValueChange = onBalanceChange,
             )
             LabeledSlider(
                 label = "Fader (front ↔ rear)",
                 value = state.fader,
                 valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
+                enabled = controlsEnabled,
                 onValueChange = onFaderChange,
             )
 
@@ -118,18 +132,21 @@ fun ControlScreen(
                 label = "Treble",
                 value = state.treble,
                 valueRange = 0..MosconiProtocol.TONE_STEPS,
+                enabled = controlsEnabled,
                 onValueChange = onTrebleChange,
             )
             LabeledSlider(
                 label = "Mid",
                 value = state.mid,
                 valueRange = 0..MosconiProtocol.TONE_STEPS,
+                enabled = controlsEnabled,
                 onValueChange = onMidChange,
             )
             LabeledSlider(
                 label = "Bass",
                 value = state.bass,
                 valueRange = 0..MosconiProtocol.TONE_STEPS,
+                enabled = controlsEnabled,
                 onValueChange = onBassChange,
             )
 
@@ -159,9 +176,14 @@ fun ControlScreen(
  * every second while connected, so anything older than [STALE_AFTER_MILLIS] means recent
  * polls are failing (a timeout, a checksum mismatch, a flaky link) - not stale for good,
  * but worth flagging rather than silently continuing to show what might be old data.
+ *
+ * A recent local edit is shown as a distinct, deliberate "Adjusting…" state rather than
+ * reusing the stale/error styling: the ViewModel *intentionally* pauses applying poll
+ * results for a few seconds after any slider/button touch, so a response can't revert the
+ * value the user just picked - and that shouldn't look like something has gone wrong.
  */
 @Composable
-private fun SyncStatusRow(lastSyncedAtMillis: Long?) {
+private fun SyncStatusRow(lastSyncedAtMillis: Long?, lastLocalEditAtMillis: Long?) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -170,12 +192,16 @@ private fun SyncStatusRow(lastSyncedAtMillis: Long?) {
         }
     }
 
-    val ageMillis = lastSyncedAtMillis?.let { now - it }
-    val isStale = ageMillis == null || ageMillis > STALE_AFTER_MILLIS
+    val editAgeMillis = lastLocalEditAtMillis?.let { now - it }
+    val isPausedForEdit = editAgeMillis != null && editAgeMillis < PAUSE_READS_AFTER_EDIT_MS
+
+    val syncAgeMillis = lastSyncedAtMillis?.let { now - it }
+    val isStale = syncAgeMillis == null || syncAgeMillis > STALE_AFTER_MILLIS
 
     val (dotColor, label) = when {
+        isPausedForEdit -> MaterialTheme.colorScheme.primary to "Adjusting…"
         lastSyncedAtMillis == null -> MaterialTheme.colorScheme.outline to "Reading current settings…"
-        isStale -> Color(0xFFFFA000) to "Sync lost – last update ${(ageMillis!! / 1000)}s ago"
+        isStale -> Color(0xFFFFA000) to "Sync lost – last update ${(syncAgeMillis!! / 1000)}s ago"
         else -> Color(0xFF4CAF50) to "Synced with device"
     }
 
@@ -189,13 +215,18 @@ private fun SyncStatusRow(lastSyncedAtMillis: Long?) {
 /** Poll interval is 1s; two missed polls in a row is a meaningfully stale signal. */
 private const val STALE_AFTER_MILLIS = 3000L
 
+/** Mirrors MosconiViewModel.PAUSE_READS_AFTER_EDIT_MS (kept in sync manually - the
+ *  ViewModel doesn't expose it, since this is a display concern, not a state one). */
+private const val PAUSE_READS_AFTER_EDIT_MS = 3000L
+
 @Composable
-private fun PresetRow(selected: Int, onPresetSelected: (Int) -> Unit) {
+private fun PresetRow(selected: Int, enabled: Boolean, onPresetSelected: (Int) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (index in 0 until MosconiProtocol.PRESET_COUNT) {
             FilterChip(
                 modifier = Modifier.weight(1f),
                 selected = selected == index,
+                enabled = enabled,
                 onClick = { onPresetSelected(index) },
                 label = { Text("P${index + 1}") },
             )
@@ -214,18 +245,25 @@ private fun LabeledSlider(
     label: String,
     value: Int,
     valueRange: IntRange,
+    enabled: Boolean,
     onValueChange: (Int) -> Unit,
 ) {
+    val labelColor = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Text("$value", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = labelColor)
+            Text(
+                "$value",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Slider(
             value = value.toFloat(),
             onValueChange = { onValueChange(it.toInt()) },
             valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
             steps = (valueRange.last - valueRange.first - 1).coerceAtLeast(0),
+            enabled = enabled,
         )
     }
 }
