@@ -43,7 +43,10 @@ class ScreenshotTest {
         bass = 10,
         selectedPreset = 1,
         hapticFeedback = true,
-        lastSyncedAtMillis = 1L,
+        // Paparazzi's own rendering pipeline takes several real seconds, which would
+        // otherwise make this sample look "stale" by the time the pixels are captured -
+        // bias into the future so screenshots show the steady-state "synced" look.
+        lastSyncedAtMillis = System.currentTimeMillis() + 60_000L,
     )
 
     @Test
@@ -148,7 +151,7 @@ class ScreenshotTestWideScreen {
                         mid = 7,
                         bass = 10,
                         selectedPreset = 1,
-                        lastSyncedAtMillis = 1L,
+                        lastSyncedAtMillis = System.currentTimeMillis() + 60_000L, // see comment above
                     ),
                     onVolumeChange = {},
                     onVolumeTargetChange = {},

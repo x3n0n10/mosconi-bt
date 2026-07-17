@@ -26,10 +26,16 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import dev.x3n0n10.mosconibt.ControlUiState
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.ResponsiveContent
@@ -148,26 +154,40 @@ fun ControlScreen(
     }
 }
 
+/**
+ * Reflects live poll freshness, not just "has a poll ever succeeded": status polls run
+ * every second while connected, so anything older than [STALE_AFTER_MILLIS] means recent
+ * polls are failing (a timeout, a checksum mismatch, a flaky link) - not stale for good,
+ * but worth flagging rather than silently continuing to show what might be old data.
+ */
 @Composable
 private fun SyncStatusRow(lastSyncedAtMillis: Long?) {
-    val synced = lastSyncedAtMillis != null
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            now = System.currentTimeMillis()
+        }
+    }
+
+    val ageMillis = lastSyncedAtMillis?.let { now - it }
+    val isStale = ageMillis == null || ageMillis > STALE_AFTER_MILLIS
+
+    val (dotColor, label) = when {
+        lastSyncedAtMillis == null -> MaterialTheme.colorScheme.outline to "Reading current settings…"
+        isStale -> Color(0xFFFFA000) to "Sync lost – last update ${(ageMillis!! / 1000)}s ago"
+        else -> Color(0xFF4CAF50) to "Synced with device"
+    }
+
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(
-                    color = if (synced) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline,
-                    shape = CircleShape,
-                ),
-        )
+        Box(modifier = Modifier.size(8.dp).background(color = dotColor, shape = CircleShape))
         Spacer(Modifier.width(8.dp))
-        Text(
-            if (synced) "Synced with device" else "Reading current settings…",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+/** Poll interval is 1s; two missed polls in a row is a meaningfully stale signal. */
+private const val STALE_AFTER_MILLIS = 3000L
 
 @Composable
 private fun PresetRow(selected: Int, onPresetSelected: (Int) -> Unit) {

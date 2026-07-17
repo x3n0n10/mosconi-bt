@@ -184,12 +184,14 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     fun connect(device: BtDevice) {
         prefs.lastDeviceAddress = device.address
+        _ui.update { it.copy(lastSyncedAtMillis = null) } // this connection hasn't synced anything yet
         viewModelScope.launch { bluetooth.connect(device) }
     }
 
     fun disconnect() {
         stopPolling()
         bluetooth.disconnect()
+        _ui.update { it.copy(lastSyncedAtMillis = null) }
     }
 
     fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {
