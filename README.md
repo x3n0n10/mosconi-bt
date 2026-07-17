@@ -33,13 +33,13 @@ Open the project root in Android Studio (Koala or newer) and it will pick up bot
 modules automatically. `:app` needs `compileSdk 34` / a recent Android SDK installed
 via Android Studio's SDK Manager.
 
-> **Note on how this was built:** the sandbox this project was authored in blocks
-> `dl.google.com` (Google's Maven repo, which hosts AndroidX/Compose/the Android Gradle
-> Plugin) by network policy, so only `:protocol` could actually be compiled and tested
-> there. `:app`'s Compose/Bluetooth code was written and carefully reviewed by hand but
-> has **not been compiled**. Build it in Android Studio first and expect to fix minor
-> issues (an import path, an API signature drift between library versions) before your
-> first successful build.
+> **Build status:** both `./gradlew :protocol:test` and `./gradlew :app:assembleDebug`
+> have been run end-to-end against a real Android SDK (platform 34 / build-tools 34.0.0)
+> and succeed — the resulting `app-debug.apk` was inspected with `aapt dump badging` to
+> confirm the package name, permissions, and min/target SDK. It has **not** been
+> installed on a device or connected to real hardware yet, so functional behavior
+> (pairing, sending commands, the two flagged protocol assumptions below) is still
+> unverified.
 
 ## Setting up the DSP
 
