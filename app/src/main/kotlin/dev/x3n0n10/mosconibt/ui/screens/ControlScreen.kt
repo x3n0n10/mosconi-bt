@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +28,7 @@ import dev.x3n0n10.mosconibt.ControlUiState
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.ResponsiveContent
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ControlScreen(
     state: ControlUiState,

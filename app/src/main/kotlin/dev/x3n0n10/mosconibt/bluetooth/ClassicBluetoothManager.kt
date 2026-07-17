@@ -61,13 +61,14 @@ class ClassicBluetoothManager(context: Context) {
     @SuppressLint("MissingPermission")
     suspend fun connect(target: BtDevice) = withContext(Dispatchers.IO) {
         _state.value = BtConnectionState.Connecting(target)
-        val device: BluetoothDevice? = adapter?.bondedDevices?.firstOrNull { it.address == target.address }
-        if (device == null) {
+        val currentAdapter = adapter
+        val device: BluetoothDevice? = currentAdapter?.bondedDevices?.firstOrNull { it.address == target.address }
+        if (currentAdapter == null || device == null) {
             _state.value = BtConnectionState.Failed(target, "Device is no longer paired")
             return@withContext
         }
         try {
-            adapter.cancelDiscovery()
+            currentAdapter.cancelDiscovery()
             val sock = device.createRfcommSocketToServiceRecord(UUID.fromString(MosconiProtocol.SPP_UUID))
             sock.connect()
             socket = sock
