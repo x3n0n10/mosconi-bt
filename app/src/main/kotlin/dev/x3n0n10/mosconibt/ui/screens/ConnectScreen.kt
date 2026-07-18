@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.x3n0n10.mosconibt.bluetooth.BtConnectionState
 import dev.x3n0n10.mosconibt.bluetooth.BtDevice
@@ -90,11 +91,18 @@ fun ConnectScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Paired devices", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Paired devices",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f, fill = false),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.width(8.dp))
                         OutlinedButton(onClick = onRefresh) {
                             Icon(Icons.Filled.Refresh, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Refresh")
+                            Text("Refresh", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -112,15 +120,23 @@ fun ConnectScreen(
                         LazyColumn {
                             items(devices, key = { it.address }) { device ->
                                 ListItem(
-                                    headlineContent = { Text(device.name) },
-                                    supportingContent = { Text(device.address) },
+                                    headlineContent = {
+                                        Text(device.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    },
+                                    supportingContent = {
+                                        Text(device.address, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    },
                                     leadingContent = { Icon(Icons.Filled.Bluetooth, contentDescription = null) },
                                     trailingContent = {
                                         Button(
                                             onClick = { onConnect(device) },
                                             enabled = connectingAddress != device.address,
                                         ) {
-                                            Text(if (connectingAddress == device.address) "Connecting…" else "Connect")
+                                            Text(
+                                                if (connectingAddress == device.address) "Connecting…" else "Connect",
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
                                         }
                                     },
                                 )

@@ -214,6 +214,29 @@ class ScreenshotTestWideScreen {
             }
         }
     }
+
+    @Test
+    fun connectScreen_ultraWideScreen_widthIsCappedToHeight() {
+        paparazzi.snapshot {
+            AppRoot {
+                ConnectScreen(
+                    devices = listOf(
+                        BtDevice(name = "MOSCONI PICO 6|8", address = "AA:BB:CC:11:22:33"),
+                        BtDevice(name = "Pixel Buds Pro", address = "AA:BB:CC:44:55:66"),
+                    ),
+                    connectionState = BtConnectionState.Idle,
+                    isAutoConnecting = false,
+                    hasBluetoothPermission = true,
+                    bluetoothAvailable = true,
+                    bluetoothEnabled = true,
+                    onRequestPermission = {},
+                    onRefresh = {},
+                    onConnect = {},
+                    onCancelAutoConnect = {},
+                )
+            }
+        }
+    }
 }
 
 /** Mirrors MainActivity's root composition (theme + background-painting Surface). */
