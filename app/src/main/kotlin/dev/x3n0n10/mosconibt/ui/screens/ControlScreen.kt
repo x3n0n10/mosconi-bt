@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.x3n0n10.mosconibt.ControlUiState
@@ -227,34 +228,44 @@ private const val PAUSE_READS_AFTER_EDIT_MS = 3000L
 
 /**
  * [names] are the custom preset names read (read-only) from the DSP itself - see
- * [dev.x3n0n10.mosconibt.protocol.MosconiProtocol.parsePresetNames]. "P<n>" always
- * labels the chip; a non-blank custom name (or nothing, if unset/not read yet) shows
- * as a second, smaller line underneath.
+ * [dev.x3n0n10.mosconibt.protocol.MosconiProtocol.parsePresetNames]. The four chips
+ * themselves always stay identically shaped/sized (just "P<n>", nothing content-
+ * dependent) - a non-blank custom name renders as its own label *below* the chip,
+ * clipped to that chip's column width so neighbors can never overlap.
  */
 @Composable
 private fun PresetRow(selected: Int, names: List<String?>, enabled: Boolean, onPresetSelected: (Int) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (index in 0 until MosconiProtocol.PRESET_COUNT) {
             val customName = names.getOrNull(index)?.takeUnless { it.isBlank() }
-            FilterChip(
-                modifier = Modifier.weight(1f),
-                selected = selected == index,
-                enabled = enabled,
-                onClick = { onPresetSelected(index) },
-                label = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("P${index + 1}", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (customName != null) {
-                            Text(
-                                customName,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
-            )
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                FilterChip(
+                    modifier = Modifier.fillMaxWidth(),
+                    selected = selected == index,
+                    enabled = enabled,
+                    onClick = { onPresetSelected(index) },
+                    label = {
+                        Text(
+                            "P${index + 1}",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+                if (customName != null) {
+                    Text(
+                        customName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    )
+                }
+            }
         }
     }
 }
