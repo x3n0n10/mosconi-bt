@@ -227,25 +227,32 @@ private const val PAUSE_READS_AFTER_EDIT_MS = 3000L
 
 /**
  * [names] are the custom preset names read (read-only) from the DSP itself - see
- * [dev.x3n0n10.mosconibt.protocol.MosconiProtocol.parsePresetNames]. A null/blank slot
- * (no custom name set on the device, or not read yet) falls back to a plain "P<n>".
+ * [dev.x3n0n10.mosconibt.protocol.MosconiProtocol.parsePresetNames]. "P<n>" always
+ * labels the chip; a non-blank custom name (or nothing, if unset/not read yet) shows
+ * as a second, smaller line underneath.
  */
 @Composable
 private fun PresetRow(selected: Int, names: List<String?>, enabled: Boolean, onPresetSelected: (Int) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (index in 0 until MosconiProtocol.PRESET_COUNT) {
-            val customName = names.getOrNull(index)
+            val customName = names.getOrNull(index)?.takeUnless { it.isBlank() }
             FilterChip(
                 modifier = Modifier.weight(1f),
                 selected = selected == index,
                 enabled = enabled,
                 onClick = { onPresetSelected(index) },
                 label = {
-                    Text(
-                        customName ?: "P${index + 1}",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("P${index + 1}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (customName != null) {
+                            Text(
+                                customName,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 },
             )
         }
