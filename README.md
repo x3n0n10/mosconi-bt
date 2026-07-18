@@ -102,6 +102,10 @@ rather stop and pick a different one instead. The serial (RFCOMM) session, and t
 foreground (backgrounded, screen off, task-switched away) and re-established when you
 come back — it doesn't sit connected to the DSP in the background.
 
+If you've renamed presets in the Windows tuning GUI ("Sport", "Highway", etc.), those
+names show up on the P1–P4 chips here too — read-only, this app has no UI to rename
+them, only to display what's already on the device.
+
 ## Known unknowns — verify against real hardware
 
 Static analysis of the decompiled apps tells you *what bytes get sent/parsed*, not

@@ -164,4 +164,71 @@ class MosconiProtocolTest {
             ),
         ) // corrupted checksum
     }
+
+    @Test
+    fun `buildUserDataRequest has the expected header and a self-consistent checksum`() {
+        val frame = MosconiProtocol.buildUserDataRequest(address = 0x0102, count = 63)
+        assertEquals(10, frame.size)
+        assertEquals(listOf(0x07, 0x45, 0, 0x10, 0xA2, 0x01, 0x02, 63, 0x0D), frame.toList().dropLast(1))
+        assertEquals(MosconiProtocol.Crc8.calculate(frame.copyOfRange(0, 9)), frame.last())
+    }
+
+    @Test
+    fun `parseUserDataResponse round-trips a synthetic response`() {
+        val address = MosconiProtocol.PRESET_NAME_ADDRESS
+        val count = MosconiProtocol.PRESET_NAME_COUNT
+        val payload = IntArray(count + 1) { it }
+        val frame = intArrayOf(
+            0x07, 0xC5, 0, 0x10, 0xA2,
+            (address ushr 8) and 0xFF, address and 0xFF, count,
+            *payload,
+        )
+        val withChecksum = frame + MosconiProtocol.Crc8.calculate(frame)
+
+        val parsed = assertNotNull(MosconiProtocol.parseUserDataResponse(withChecksum, address, count))
+        assertEquals(payload.toList(), parsed.toList())
+    }
+
+    @Test
+    fun `parseUserDataResponse rejects wrong length, wrong echoed address, and bad checksum`() {
+        val address = MosconiProtocol.PRESET_NAME_ADDRESS
+        val count = MosconiProtocol.PRESET_NAME_COUNT
+        val payload = IntArray(count + 1)
+        val goodFrame = intArrayOf(
+            0x07, 0xC5, 0, 0, 0xA2,
+            (address ushr 8) and 0xFF, address and 0xFF, count,
+            *payload,
+        )
+        val withGoodChecksum = goodFrame + MosconiProtocol.Crc8.calculate(goodFrame)
+
+        assertNull(MosconiProtocol.parseUserDataResponse(withGoodChecksum.copyOf(10), address, count)) // wrong length
+        assertNull(
+            MosconiProtocol.parseUserDataResponse(
+                withGoodChecksum.copyOf().also { it[5] = 0x00 },
+                address,
+                count,
+            ),
+        ) // wrong echoed address
+        assertNull(
+            MosconiProtocol.parseUserDataResponse(
+                withGoodChecksum.copyOf().also { it[it.size - 1] = it[it.size - 1] xor 0xFF },
+                address,
+                count,
+            ),
+        ) // corrupted checksum
+    }
+
+    @Test
+    fun `parsePresetNames decodes null-terminated ASCII and the unset sentinel`() {
+        val payload = IntArray(MosconiProtocol.PRESET_NAME_LENGTH * MosconiProtocol.PRESET_COUNT) { 0xFF }
+        "Sport".forEachIndexed { i, c -> payload[i] = c.code } // preset 1: "Sport", null-padded rest
+        payload[5] = 0
+        // preset 2 (index 16..31) left as all-0xFF -> unset
+        "Loud".forEachIndexed { i, c -> payload[32 + i] = c.code } // preset 3: "Loud"
+        payload[36] = 0
+        // preset 4 (index 48..63) left as all-0xFF -> unset
+
+        val names = MosconiProtocol.parsePresetNames(payload)
+        assertEquals(listOf("Sport", null, "Loud", null), names)
+    }
 }

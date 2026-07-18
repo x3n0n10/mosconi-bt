@@ -213,9 +213,45 @@ Windows GUI issues once right after connecting to hydrate its *entire* settings 
 The same `AD_USERDATA` memory addresses it reads happen to include everything
 `INFORMATION_LOAD` already covers (byte offsets 2/3/4/5 = fader/balance/sub/volume,
 56/57/58 = bass/mid/treble), so this project only implements the lighter
-`INFORMATION_LOAD` poll — no need for the bulk read at this app's scope. It's
-documented here in case a future feature needs one of the many other settings that
-live in that address space.
+`INFORMATION_LOAD` poll for the regular status-sync loop — no need for the bulk read
+at that scope.
+
+This project *does* use the bulk read for one thing: the four **custom preset names**
+(`buildUserDataRequest`/`parseUserDataResponse`/`parsePresetNames` in
+`MosconiProtocol.kt`), read once per connection and shown read-only next to the P1–P4
+preset chips — this app never writes them; renaming stays a Windows-GUI-only feature.
+
+### Preset names (`USERDATA_LOAD`, read-only)
+
+```
+Request  (10 bytes): [0x07, 0x45, 0x00, STATUS|0x10, 0xA2, ADRH, ADRL, COUNT, 0x0D, CRC8]
+Response (COUNT+10 bytes): [0x07, 0xC5, LEN_HINT, STATUS, 0xA2, ADRH, ADRL, COUNT, payload(COUNT+1 bytes), CRC8]
+```
+
+- `ADRH`/`ADRL` split a 16-bit address; `COUNT` is zero-based (`COUNT+1` bytes come
+  back). Preset names live at address `256 + 16*16 = 512` (a shared 24-entry, 16-
+  byte-per-entry label table that also holds input/output/mixer-channel labels this
+  app doesn't use; entries 16–19 are the preset names, P1–P4 in order, contiguous) — a
+  single request with `COUNT=63` fetches all four at once.
+- Each 16-byte slot is raw ASCII, null-padded; a first byte of `0xFF` is the device's
+  own "no custom name set" sentinel (the Windows GUI checks the same byte before
+  falling back to a generic "Preset N").
+- `LEN_HINT` (response byte 2) mirrors `COUNT` — sent early, before the rest of the
+  frame, so the receiving side can compute the total frame length up front. This
+  resolves what used to be an open question here about that byte's purpose.
+
+**ASSUMPTION, unverified against real hardware:** the exact response length. It's
+derived from how the Windows GUI's `EEPROM_DATEN_RECEIVE` indexes the payload it
+copies out of `$UARTWERT` (bytes 9 through `9+COUNT`, 1-indexed) — but the GUI's own
+receive-length table (`$UARTWERT[3] + 11`) disagrees with that indexing by exactly one
+byte, and there's no way to resolve which is the bug (or whether both are "correct" for
+different reasons, e.g. a padding byte) without a live capture. This app requests all
+four names in one read (`userDataResponseSize(63)` bytes) and validates the reply with
+the same CRC-8 already used for [`INFORMATION_LOAD`](#crc-8); if the length guess is
+wrong the read simply times out and the UI falls back to the plain "P1"–"P4" labels —
+never a garbled or misaligned name. If a real device's response turns out to be one
+byte longer, add `1` to `userDataResponseSize` in `MosconiProtocol.kt` — everything
+else about the framing stays the same.
 
 ### CRC-8
 
@@ -256,10 +292,12 @@ hardware:
    controlled by a request field neither app happens to set deliberately. If it turns
    out to need explicit selection instead, the poll loop needs a page-selector byte
    added to `buildStatusRequest`.
-3. **The bulk `USERDATA_LOAD` response's exact byte-3 framing semantics** (an early
-   length hint the Windows GUI uses to know how many more bytes to block-read) weren't
-   fully pinned down, since this project doesn't use that path — noted here only in
-   case someone extends the app to read from the wider `AD_USERDATA` address space.
+3. **The bulk `USERDATA_LOAD` response's exact total length** (used here for the
+   read-only preset names — see [above](#preset-names-userdata_load-read-only)). Two
+   different pieces of the Windows GUI's own source disagree by one byte on this; this
+   project went with the more directly-supported derivation. Fails safe either way — a
+   wrong guess just times out and the UI keeps showing "P1"–"P4" — so confirming this
+   is a nice-to-have, not a functional blocker.
 
 All are one-line fixes once confirmed; see the `ASSUMPTION`/doc comments in
 `protocol/src/main/kotlin/dev/x3n0n10/mosconibt/protocol/MosconiProtocol.kt`.

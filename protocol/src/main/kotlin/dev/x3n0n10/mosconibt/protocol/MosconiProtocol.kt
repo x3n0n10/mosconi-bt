@@ -18,9 +18,12 @@ package dev.x3n0n10.mosconibt.protocol
  * No live capture against real hardware was done for either side. Remaining
  * ASSUMPTIONS to verify against a real unit:
  *  - Which end of the volume slider is loud vs. quiet ([LOG_VOLUME_TABLE] order).
- *  - Whether [InformationResponse]'s "page toggle" bit really alternates
+ *  - Whether [StatusResponse]'s "page toggle" bit really alternates
  *    autonomously on the device between successive status polls (this project
  *    never sends a page selector, matching what the Windows app does).
+ *  - The exact total length of a [buildUserDataRequest] response ([userDataResponseSize]),
+ *    used only for the read-only custom preset names - fails safe if wrong (the read
+ *    times out and the UI falls back to plain "P1".."P4" labels).
  *
  * Transport: classic Bluetooth RFCOMM/SPP (NOT BLE) using the standard SPP UUID.
  * Write frames (the `0x08`-prefixed short format) carry no checksum and get a
@@ -234,6 +237,107 @@ object MosconiProtocol {
         }
 
         return StatusResponse(statusByte = statusByte, preset = preset, volumeRaw = volumeRaw, page = page)
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Bulk EEPROM/"USERDATA" read - "USERDATA_LOAD" in the Windows GUI's source. Used
+    // here only to read the four custom preset names (read-only; this app never writes
+    // them). The wider address space this command can reach covers a lot more than
+    // that - see PROTOCOL.md.
+    // ---------------------------------------------------------------------------------
+
+    private const val CMD_EXTENDED_REQUEST: Int = 0x45 // 69 - shared by USERDATA_LOAD and FLOWDATA_LOAD
+    private const val CMD_USERDATA_RESPONSE: Int = 0xC5 // 197
+    private const val SUBCMD_USERDATA: Int = 0xA2 // selects the EEPROM/"USERDATA" memory space, vs 0xA0 "FLOWDATA"
+
+    /**
+     * Where the DSP stores its 4 custom preset names: a 24-entry, 16-byte-per-entry
+     * label table (shared with several other labels this app doesn't use - input/
+     * output/mixer channel names) starting at address 256. Entries 16-19 are the
+     * preset names, P1..P4 in order, and are contiguous, so one [buildUserDataRequest]
+     * for [PRESET_NAME_COUNT] bytes covers all four.
+     */
+    const val PRESET_NAME_ADDRESS: Int = 256 + 16 * 16
+    const val PRESET_NAME_LENGTH: Int = 16
+    const val PRESET_NAME_COUNT: Int = PRESET_NAME_LENGTH * PRESET_COUNT - 1 // "count" is zero-based on the wire
+
+    /**
+     * Builds a request for `count + 1` bytes of the DSP's bulk "USERDATA" (EEPROM-
+     * backed settings) memory starting at [address], e.g. [PRESET_NAME_ADDRESS] with
+     * [PRESET_NAME_COUNT]. Response size/shape is [userDataResponseSize]; parse it with
+     * [parseUserDataResponse].
+     *
+     * ASSUMPTION: reverse-engineered from the Windows GUI's `USERDATA_LOAD` request
+     * builder - never captured live against real hardware. See PROTOCOL.md for what's
+     * still unconfirmed about the response side.
+     */
+    fun buildUserDataRequest(address: Int, count: Int, lastStatusByte: Int = 0): IntArray {
+        val payload = intArrayOf(
+            CMD_STATUS_FAMILY,
+            CMD_EXTENDED_REQUEST,
+            0,
+            (lastStatusByte or 0x10) and 0xFF,
+            SUBCMD_USERDATA,
+            (address ushr 8) and 0xFF,
+            address and 0xFF,
+            count and 0xFF,
+            FRAME_TERMINATOR,
+        )
+        return payload + Crc8.calculate(payload)
+    }
+
+    /**
+     * Total wire bytes of the response to a [buildUserDataRequest] for [count]: an
+     * 8-byte header, `count + 1` payload bytes, and a trailing CRC-8.
+     *
+     * ASSUMPTION: derived from how the Windows GUI's `EEPROM_DATEN_RECEIVE` indexes the
+     * payload it copies out of the response (bytes 9..9+count, 1-indexed), not from a
+     * live capture - the GUI's own receive-buffering code disagreed with itself by
+     * exactly one byte on this, and there's no way to resolve that without hardware. If
+     * a real device's response is one byte longer than this, add 1 here; everything
+     * else (payload offsets, CRC coverage) stays the same.
+     */
+    fun userDataResponseSize(count: Int): Int = count + 10
+
+    /**
+     * Validates and unwraps a [buildUserDataRequest] response: checks the CRC-8 and
+     * that the echoed selector/address/count match what was asked for, then returns
+     * just the payload (`count + 1` bytes). Returns null on any mismatch - including a
+     * wrong guess about [userDataResponseSize] - so a framing error fails quietly
+     * rather than risk handing back misaligned bytes.
+     */
+    fun parseUserDataResponse(frame: IntArray, address: Int, count: Int): IntArray? {
+        if (frame.size != userDataResponseSize(count)) return null
+        if (Crc8.calculate(frame.copyOfRange(0, frame.size - 1)) != frame.last()) return null
+        if (frame[0] != CMD_STATUS_FAMILY || frame[1] != CMD_USERDATA_RESPONSE) return null
+        val addressHigh = (address ushr 8) and 0xFF
+        val addressLow = address and 0xFF
+        if (frame[4] != SUBCMD_USERDATA || frame[5] != addressHigh || frame[6] != addressLow || frame[7] != (count and 0xFF)) {
+            return null
+        }
+        return frame.copyOfRange(8, 8 + count + 1)
+    }
+
+    /**
+     * Decodes a [parseUserDataResponse] payload (of at least [PRESET_NAME_LENGTH] *
+     * [PRESET_COUNT] bytes, i.e. a [PRESET_NAME_ADDRESS]/[PRESET_NAME_COUNT] read) into
+     * the 4 preset names, P1..P4 order. A slot is null when the DSP marks it unset
+     * (first byte of its 16-byte block is `0xFF`) - the same "no custom name" sentinel
+     * the Windows GUI itself checks - so callers should fall back to a generic label.
+     */
+    fun parsePresetNames(payload: IntArray): List<String?> {
+        require(payload.size >= PRESET_NAME_LENGTH * PRESET_COUNT)
+        return (0 until PRESET_COUNT).map { preset ->
+            val base = preset * PRESET_NAME_LENGTH
+            if (payload[base] == 0xFF) return@map null
+            (0 until PRESET_NAME_LENGTH)
+                .map { payload[base + it] }
+                .takeWhile { it != 0 }
+                .map { it.toChar() }
+                .joinToString("")
+                .trim()
+                .ifEmpty { null }
+        }
     }
 
     /**

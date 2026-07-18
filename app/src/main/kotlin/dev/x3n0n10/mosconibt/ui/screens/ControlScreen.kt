@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.x3n0n10.mosconibt.ControlUiState
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
@@ -75,7 +76,12 @@ fun ControlScreen(
             Spacer(Modifier.height(16.dp))
 
             SectionLabel("Presets")
-            PresetRow(selected = state.selectedPreset, enabled = controlsEnabled, onPresetSelected = onPresetSelected)
+            PresetRow(
+                selected = state.selectedPreset,
+                names = state.presetNames,
+                enabled = controlsEnabled,
+                onPresetSelected = onPresetSelected,
+            )
 
             Spacer(Modifier.height(28.dp))
             SectionLabel("Volume")
@@ -219,16 +225,28 @@ private const val STALE_AFTER_MILLIS = 3000L
  *  ViewModel doesn't expose it, since this is a display concern, not a state one). */
 private const val PAUSE_READS_AFTER_EDIT_MS = 3000L
 
+/**
+ * [names] are the custom preset names read (read-only) from the DSP itself - see
+ * [dev.x3n0n10.mosconibt.protocol.MosconiProtocol.parsePresetNames]. A null/blank slot
+ * (no custom name set on the device, or not read yet) falls back to a plain "P<n>".
+ */
 @Composable
-private fun PresetRow(selected: Int, enabled: Boolean, onPresetSelected: (Int) -> Unit) {
+private fun PresetRow(selected: Int, names: List<String?>, enabled: Boolean, onPresetSelected: (Int) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (index in 0 until MosconiProtocol.PRESET_COUNT) {
+            val customName = names.getOrNull(index)
             FilterChip(
                 modifier = Modifier.weight(1f),
                 selected = selected == index,
                 enabled = enabled,
                 onClick = { onPresetSelected(index) },
-                label = { Text("P${index + 1}") },
+                label = {
+                    Text(
+                        customName ?: "P${index + 1}",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
             )
         }
     }

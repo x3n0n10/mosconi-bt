@@ -43,6 +43,7 @@ class ScreenshotTest {
         bass = 10,
         selectedPreset = 1,
         hapticFeedback = true,
+        presetNames = listOf("Daily", "Highway", null, "Bass Boost"),
         // Paparazzi's own rendering pipeline takes several real seconds, which would
         // otherwise make this sample look "stale" by the time the pixels are captured -
         // bias into the future so screenshots show the steady-state "synced" look.

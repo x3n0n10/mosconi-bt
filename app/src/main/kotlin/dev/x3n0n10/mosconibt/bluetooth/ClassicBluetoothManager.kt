@@ -155,6 +155,18 @@ class ClassicBluetoothManager(context: Context) {
             }
         }
 
+    /**
+     * Best-effort flush of whatever's currently sitting in the input buffer. Used after
+     * a response whose length/framing didn't validate (e.g. a variable-length read
+     * whose exact byte count is a best guess - see [dev.x3n0n10.mosconibt.protocol.MosconiProtocol.userDataResponseSize])
+     * so leftover bytes from an under-read can't bleed into and desync the next,
+     * unrelated request/response.
+     */
+    suspend fun drainStrayInput(timeoutMs: Long = 200) = withContext(Dispatchers.IO) {
+        ioMutex.withLock { readAvailable(maxBytes = 4096, timeoutMs = timeoutMs) }
+        Unit
+    }
+
     /** Polls (non-blocking, coroutine-friendly) until [maxBytes] bytes arrive or [timeoutMs] elapses. */
     private suspend fun readAvailable(maxBytes: Int, timeoutMs: Long): ByteArray? =
         readUpTo(maxBytes, timeoutMs, exact = false)

@@ -38,6 +38,10 @@ data class ControlUiState(
     val bass: Int = 8,
     val selectedPreset: Int = 0,
     val hapticFeedback: Boolean = true,
+    /** Custom preset names as set in the Windows tuning GUI (read-only here - this app
+     *  never writes them). A null slot means no custom name is set on the device, or it
+     *  hasn't been read yet; the UI should fall back to a generic "P<n>" label. */
+    val presetNames: List<String?> = List(MosconiProtocol.PRESET_COUNT) { null },
     /** Wall-clock time of the last successfully parsed status read, or null if never. */
     val lastSyncedAtMillis: Long? = null,
     /** Wall-clock time of the last local slider/button edit, or null if none this session. */
@@ -60,6 +64,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     private var pollJob: Job? = null
     private var lastStatusByte: Int = 0
+    private var presetNameFetchJob: Job? = null
 
     private var connectJob: Job? = null
 
@@ -166,11 +171,50 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
                 delay(1000)
             }
         }
+        presetNameFetchJob?.cancel()
+        presetNameFetchJob = viewModelScope.launch { fetchPresetNames() }
     }
 
     private fun stopPolling() {
         pollJob?.cancel()
         pollJob = null
+        presetNameFetchJob?.cancel()
+        presetNameFetchJob = null
+    }
+
+    /**
+     * One-shot (not repeated per poll cycle) read of the 4 custom preset names via the
+     * DSP's bulk "USERDATA" memory - see [MosconiProtocol.buildUserDataRequest]. Purely
+     * cosmetic and best-effort: this app never writes these, and if the read times out
+     * or fails to validate (see the ASSUMPTION notes on
+     * [MosconiProtocol.userDataResponseSize]), the UI just keeps showing the generic
+     * "P<n>" labels it already falls back to - never garbled/misaligned data, and never
+     * something the user needs to react to.
+     */
+    private suspend fun fetchPresetNames() {
+        val request = MosconiProtocol.buildUserDataRequest(
+            address = MosconiProtocol.PRESET_NAME_ADDRESS,
+            count = MosconiProtocol.PRESET_NAME_COUNT,
+            lastStatusByte = lastStatusByte,
+        )
+        val response = bluetooth.sendAndReceive(
+            request.toByteArray(),
+            responseSize = MosconiProtocol.userDataResponseSize(MosconiProtocol.PRESET_NAME_COUNT),
+        )
+        if (response == null) {
+            bluetooth.drainStrayInput()
+            return
+        }
+        val payload = MosconiProtocol.parseUserDataResponse(
+            response.map { it.toInt() and 0xFF }.toIntArray(),
+            address = MosconiProtocol.PRESET_NAME_ADDRESS,
+            count = MosconiProtocol.PRESET_NAME_COUNT,
+        )
+        if (payload == null) {
+            bluetooth.drainStrayInput()
+            return
+        }
+        _ui.update { it.copy(presetNames = MosconiProtocol.parsePresetNames(payload)) }
     }
 
     private suspend fun pollStatusOnce() {
@@ -254,9 +298,17 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         autoConnectSuppressed = true
         connectJob?.cancel()
         prefs.lastDeviceAddress = device.address
-        // Neither is valid for a new connection: nothing's been synced yet, and any
-        // earlier edit belonged to a previous session's (possibly different) device.
-        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null, isAutoConnecting = automatic) }
+        // None of these are valid for a new connection: nothing's been synced yet, any
+        // earlier edit belonged to a previous session's (possibly different) device,
+        // and a different device may have entirely different (or no) custom names.
+        _ui.update {
+            it.copy(
+                lastSyncedAtMillis = null,
+                lastLocalEditAtMillis = null,
+                isAutoConnecting = automatic,
+                presetNames = List(MosconiProtocol.PRESET_COUNT) { null },
+            )
+        }
         connectJob = viewModelScope.launch { bluetooth.connect(device) }
     }
 
@@ -264,7 +316,14 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         connectJob?.cancel()
         stopPolling()
         bluetooth.disconnect()
-        _ui.update { it.copy(lastSyncedAtMillis = null, lastLocalEditAtMillis = null, isAutoConnecting = false) }
+        _ui.update {
+            it.copy(
+                lastSyncedAtMillis = null,
+                lastLocalEditAtMillis = null,
+                isAutoConnecting = false,
+                presetNames = List(MosconiProtocol.PRESET_COUNT) { null },
+            )
+        }
     }
 
     fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {
