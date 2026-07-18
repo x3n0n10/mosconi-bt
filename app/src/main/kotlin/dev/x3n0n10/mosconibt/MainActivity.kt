@@ -1,10 +1,12 @@
 package dev.x3n0n10.mosconibt
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,7 +54,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun hasBluetoothConnectPermission(context: android.content.Context): Boolean {
+private fun hasBluetoothConnectPermission(context: Context): Boolean {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
     return context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 }
@@ -64,7 +66,7 @@ fun MosconiApp(viewModel: MosconiViewModel = viewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var hasPermission by remember { mutableStateOf(hasBluetoothConnectPermission(context)) }
 
-    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+    val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         hasPermission = granted

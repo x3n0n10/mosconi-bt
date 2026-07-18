@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -52,7 +53,7 @@ class ClassicBluetoothManager(context: Context) {
 
     private val appContext = context.applicationContext
 
-    private var socket: android.bluetooth.BluetoothSocket? = null
+    private var socket: BluetoothSocket? = null
     private var output: OutputStream? = null
     private var input: InputStream? = null
     private val ioMutex = Mutex()

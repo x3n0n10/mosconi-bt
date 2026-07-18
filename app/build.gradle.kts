@@ -37,6 +37,10 @@ android {
     }
 
     composeOptions {
+        // Must match the Kotlin plugin version above (1.9.24) - the Compose compiler
+        // extension is tightly coupled to the Kotlin compiler it plugs into; see
+        // https://developer.android.com/jetpack/androidx/releases/compose-kotlin for the
+        // compatibility table before bumping either version independently.
         kotlinCompilerExtensionVersion = "1.5.14"
     }
 
@@ -49,6 +53,10 @@ android {
 
 configurations.all {
     resolutionStrategy {
+        // Without this, the Guava version Paparazzi's dependencies pull in transitively
+        // conflicts with another copy on the classpath and throws IllegalAccessError/
+        // NoClassDefFoundError at test-run time. Forcing a single resolved version fixes
+        // it; re-check this pin if Paparazzi is ever upgraded.
         force("com.google.guava:guava:31.1-jre")
     }
 }
@@ -58,7 +66,6 @@ dependencies {
 
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
-    androidTestImplementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
@@ -74,11 +81,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }

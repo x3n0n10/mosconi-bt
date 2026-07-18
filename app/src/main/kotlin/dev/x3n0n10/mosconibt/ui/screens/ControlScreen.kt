@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.x3n0n10.mosconibt.ControlUiState
+import dev.x3n0n10.mosconibt.MosconiViewModel
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.ResponsiveContent
 import kotlinx.coroutines.delay
@@ -200,7 +201,7 @@ private fun SyncStatusRow(lastSyncedAtMillis: Long?, lastLocalEditAtMillis: Long
     }
 
     val editAgeMillis = lastLocalEditAtMillis?.let { now - it }
-    val isPausedForEdit = editAgeMillis != null && editAgeMillis < PAUSE_READS_AFTER_EDIT_MS
+    val isPausedForEdit = editAgeMillis != null && editAgeMillis < MosconiViewModel.PAUSE_READS_AFTER_EDIT_MS
 
     val syncAgeMillis = lastSyncedAtMillis?.let { now - it }
     val isStale = syncAgeMillis == null || syncAgeMillis > STALE_AFTER_MILLIS
@@ -221,10 +222,6 @@ private fun SyncStatusRow(lastSyncedAtMillis: Long?, lastLocalEditAtMillis: Long
 
 /** Poll interval is 1s; two missed polls in a row is a meaningfully stale signal. */
 private const val STALE_AFTER_MILLIS = 3000L
-
-/** Mirrors MosconiViewModel.PAUSE_READS_AFTER_EDIT_MS (kept in sync manually - the
- *  ViewModel doesn't expose it, since this is a display concern, not a state one). */
-private const val PAUSE_READS_AFTER_EDIT_MS = 3000L
 
 /**
  * [names] are the custom preset names read (read-only) from the DSP itself - see

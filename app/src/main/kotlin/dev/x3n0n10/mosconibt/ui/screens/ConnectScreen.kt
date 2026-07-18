@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.x3n0n10.mosconibt.bluetooth.BtConnectionState
 import dev.x3n0n10.mosconibt.bluetooth.BtDevice
@@ -165,7 +166,7 @@ private fun AutoConnectBanner(deviceName: String, onCancel: () -> Unit) {
 
 @Composable
 private fun StatusMessage(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     message: String,
     action: (@Composable () -> Unit)? = null,

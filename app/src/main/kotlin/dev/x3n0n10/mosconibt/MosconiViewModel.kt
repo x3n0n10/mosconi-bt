@@ -336,58 +336,51 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     fun onVolumeChange(step: Int) {
         prefs.volumeStep = step
-        _ui.update { it.copy(volumeStep = step) }
-        send(packetState.setVolume(_ui.value.volumeTarget, step))
-        vibrateTick()
+        updateAndSend({ it.copy(volumeStep = step) }, packetState.setVolume(_ui.value.volumeTarget, step))
     }
 
     fun onSubChange(level: Int) {
         prefs.subLevel = level
-        _ui.update { it.copy(subLevel = level) }
-        send(packetState.setSub(level))
-        vibrateTick()
+        updateAndSend({ it.copy(subLevel = level) }, packetState.setSub(level))
     }
 
     fun onBalanceChange(position: Int) {
         prefs.balance = position
-        _ui.update { it.copy(balance = position) }
-        send(packetState.setBalance(position))
-        vibrateTick()
+        updateAndSend({ it.copy(balance = position) }, packetState.setBalance(position))
     }
 
     fun onFaderChange(position: Int) {
         prefs.fader = position
-        _ui.update { it.copy(fader = position) }
-        send(packetState.setFader(position))
-        vibrateTick()
+        updateAndSend({ it.copy(fader = position) }, packetState.setFader(position))
     }
 
     fun onTrebleChange(level: Int) {
         prefs.treble = level
-        _ui.update { it.copy(treble = level) }
-        send(packetState.setTreble(level))
-        vibrateTick()
+        updateAndSend({ it.copy(treble = level) }, packetState.setTreble(level))
     }
 
     fun onMidChange(level: Int) {
         prefs.mid = level
-        _ui.update { it.copy(mid = level) }
-        send(packetState.setMid(level))
-        vibrateTick()
+        updateAndSend({ it.copy(mid = level) }, packetState.setMid(level))
     }
 
     fun onBassChange(level: Int) {
         prefs.bass = level
-        _ui.update { it.copy(bass = level) }
-        send(packetState.setBass(level))
-        vibrateTick()
+        updateAndSend({ it.copy(bass = level) }, packetState.setBass(level))
     }
 
     fun onPresetSelected(index: Int) {
         prefs.selectedPreset = index
-        _ui.update { it.copy(selectedPreset = index) }
-        send(packetState.selectPreset(index))
-        vibrateTick(strong = true)
+        updateAndSend({ it.copy(selectedPreset = index) }, packetState.selectPreset(index), strong = true)
+    }
+
+    /** Shared tail of every per-control edit above: apply the UI state change, send the
+     *  freshly-built frame, and give haptic feedback - factored out since all 7 controls
+     *  do exactly this, differing only in which field/frame-builder they use. */
+    private fun updateAndSend(update: (ControlUiState) -> ControlUiState, frame: IntArray, strong: Boolean = false) {
+        _ui.update(update)
+        send(frame)
+        vibrateTick(strong)
     }
 
     fun onHapticFeedbackToggle(enabled: Boolean) {
@@ -426,11 +419,12 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         return manager?.defaultVibrator
     }
 
-    private companion object {
+    companion object {
         /** How long poll-derived updates are suppressed after a local edit. Deliberately a
          *  few seconds, not a few hundred milliseconds: this needs to comfortably outlast
          *  the DSP's own processing + our poll's round trip, or a read could land in the
-         *  gap and revert the very value the user just set. */
+         *  gap and revert the very value the user just set. Public so ControlScreen's
+         *  sync-status indicator can key off the exact same window instead of guessing. */
         const val PAUSE_READS_AFTER_EDIT_MS = 3000L
     }
 }
