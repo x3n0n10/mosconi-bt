@@ -85,28 +85,6 @@ fun ControlScreen(
             )
 
             Spacer(Modifier.height(28.dp))
-            SectionLabel("Volume")
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                MosconiProtocol.VolumeTarget.entries.forEachIndexed { index, target ->
-                    SegmentedButton(
-                        selected = state.volumeTarget == target,
-                        onClick = { onVolumeTargetChange(target) },
-                        enabled = controlsEnabled,
-                        shape = SegmentedButtonDefaults.itemShape(index, MosconiProtocol.VolumeTarget.entries.size),
-                    ) {
-                        Text(if (target == MosconiProtocol.VolumeTarget.OUTPUT) "Output" else "Input")
-                    }
-                }
-            }
-            LabeledSlider(
-                label = if (state.volumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) "Output volume" else "Input volume",
-                value = state.volumeStep,
-                valueRange = 0..MosconiProtocol.VOLUME_STEPS,
-                enabled = controlsEnabled,
-                onValueChange = onVolumeChange,
-            )
-
-            Spacer(Modifier.height(28.dp))
             SectionLabel("Sub")
             LabeledSlider(
                 label = "Sub level",
@@ -155,6 +133,28 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.TONE_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onBassChange,
+            )
+
+            Spacer(Modifier.height(28.dp))
+            SectionLabel("Volume")
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                MosconiProtocol.VolumeTarget.entries.forEachIndexed { index, target ->
+                    SegmentedButton(
+                        selected = state.volumeTarget == target,
+                        onClick = { onVolumeTargetChange(target) },
+                        enabled = controlsEnabled,
+                        shape = SegmentedButtonDefaults.itemShape(index, MosconiProtocol.VolumeTarget.entries.size),
+                    ) {
+                        Text(if (target == MosconiProtocol.VolumeTarget.OUTPUT) "Output" else "Input")
+                    }
+                }
+            }
+            LabeledSlider(
+                label = if (state.volumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) "Output volume" else "Input volume",
+                value = state.volumeStep,
+                valueRange = 0..MosconiProtocol.VOLUME_STEPS,
+                enabled = controlsEnabled,
+                onValueChange = onVolumeChange,
             )
 
             Spacer(Modifier.height(28.dp))
