@@ -136,3 +136,12 @@ If you capture a Bluetooth HCI snoop log (Android Developer Options → "Enable
 Bluetooth HCI snoop log") while operating either official app, or a serial capture of
 the Windows GUI talking over USB, and it reveals something this app gets wrong, that's
 exactly the kind of ground-truth this project is missing — please share it.
+
+## License
+
+[MIT](LICENSE). This is an independent, unofficial project, not affiliated with,
+endorsed by, or supported by MOSCONI/Gladen — "MOSCONI" and related names/marks belong
+to their respective owners. Everything in this repository (code and documentation) is
+this project's own original work; the protocol it implements was learned by observing
+the official apps' behavior for interoperability, not by copying their code, and no
+MOSCONI code or assets are included here.
