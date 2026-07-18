@@ -253,6 +253,28 @@ never a garbled or misaligned name. If a real device's response turns out to be 
 byte longer, add `1` to `userDataResponseSize` in `MosconiProtocol.kt` — everything
 else about the framing stays the same.
 
+### PIN protection (not implemented — local Windows GUI lock, not a DSP control lock)
+
+The Windows GUI has a 4-digit PIN feature (`$PIN_ACT`/`$PIN_SEND`/`EEPROM_DATEN_RECEIVE`'s
+PIN-validity check). Worth documenting since it's easy to assume it locks the tuning
+controls this app exposes — it doesn't:
+
+- It gates exactly four **whole-device** operations in the Windows GUI: loading a saved
+  `.SDx` setup file to the DSP, doing a full "copy current setup to DSP" write, doing a
+  full "read everything from DSP" sync, and finishing the Setup Wizard's write step.
+  Entering the wrong (or no) PIN for those just pops "Enter a valid PIN" and refuses.
+- It does **not** gate the individual controls this app has (volume, sub, balance/fader,
+  tone, presets) — those work identically whether a PIN is set or not.
+- The PIN itself lives on the DSP, not just in the Windows app: `PIN_SEND` writes the 4
+  digits plus a checksum byte to the *same* bulk USERDATA EEPROM region as the preset
+  names, at address `2176` (`ADRH=8, ADRL=128`). `0xFF,0xFF,0xFF,0xFF` is the "no PIN
+  set" sentinel — the same convention as the preset-name-unset sentinel above.
+
+Since this app (like the factory Android app before it) never performs any of those
+four whole-device operations — it only ever sends small incremental control frames —
+the PIN is simply outside its scope. Nothing to implement here; noted for anyone later
+wondering why a PIN set in the Windows GUI has no visible effect in this app.
+
 ### CRC-8
 
 Read-frame checksums use the standard **CRC-8/MAXIM (DOW-CRC)** algorithm — poly

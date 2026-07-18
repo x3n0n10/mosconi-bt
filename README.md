@@ -125,6 +125,13 @@ per-channel mixer matrix, effects, time alignment, etc. — none of which this a
 or writes. If you want one of those and can help pin down its exact byte offset/format
 (either from further static analysis or a live capture), please open an issue/PR.
 
+If you've set a PIN in the Windows GUI, you may notice this app doesn't ask for it —
+that's expected, not a gap. The PIN only locks a handful of whole-device operations
+(loading/writing a full setup file, the Setup Wizard's write step) that this app never
+performs; the day-to-day controls it does expose aren't PIN-gated at all. See
+[PROTOCOL.md § PIN protection](PROTOCOL.md#pin-protection-not-implemented--local-windows-gui-lock-not-a-dsp-control-lock)
+for the full writeup.
+
 If you capture a Bluetooth HCI snoop log (Android Developer Options → "Enable
 Bluetooth HCI snoop log") while operating either official app, or a serial capture of
 the Windows GUI talking over USB, and it reveals something this app gets wrong, that's
