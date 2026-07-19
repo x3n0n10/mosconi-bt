@@ -9,6 +9,7 @@ import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import java.io.IOException
 import java.io.InputStream
@@ -149,9 +150,12 @@ class ClassicBluetoothManager(context: Context) {
             ioMutex.withLock {
                 val out = output ?: return@withLock null
                 try {
+                    Log.d(TAG, "-> ${frame.toHex()}")
                     out.write(frame)
                     out.flush()
-                    readExact(responseSize, timeoutMs)
+                    val response = readExact(responseSize, timeoutMs)
+                    Log.d(TAG, if (response != null) "<- ${response.toHex()}" else "<- timeout (wanted $responseSize bytes within ${timeoutMs}ms)")
+                    response
                 } catch (e: IOException) {
                     failConnection(e.message ?: "Read failed")
                     null
@@ -186,6 +190,12 @@ class ClassicBluetoothManager(context: Context) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (filled < length) {
             if (System.currentTimeMillis() > deadline) {
+                if (exact && filled > 0) {
+                    // Something came back, just not the full expected frame - log what did
+                    // arrive, since a partial/wrong-length response is the key signal for
+                    // diagnosing a framing assumption that doesn't match real hardware.
+                    Log.d(TAG, "<- partial before timeout: ${buffer.copyOf(filled).toHex()}")
+                }
                 return if (exact) null else buffer.copyOf(filled).takeIf { filled > 0 }
             }
             val avail = inp.available()
@@ -221,3 +231,9 @@ class ClassicBluetoothManager(context: Context) {
         socket = null
     }
 }
+
+private const val TAG = "MosconiBT"
+
+/** Hex dump for logcat, e.g. "07 69 00 10 0D A1" - temporary aid for diagnosing the
+ *  read/status protocol against real hardware; see PROTOCOL.md's confidence notes. */
+private fun ByteArray.toHex(): String = joinToString(" ") { "%02X".format(it) }

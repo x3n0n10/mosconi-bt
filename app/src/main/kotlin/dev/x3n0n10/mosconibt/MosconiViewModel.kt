@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.x3n0n10.mosconibt.bluetooth.BtConnectionState
@@ -211,6 +212,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
             count = MosconiProtocol.PRESET_NAME_COUNT,
         )
         if (payload == null) {
+            Log.d(TAG, "fetchPresetNames: got ${response.size} bytes but parseUserDataResponse rejected them")
             bluetooth.drainStrayInput()
             return
         }
@@ -223,7 +225,11 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
             request.toByteArray(),
             responseSize = MosconiProtocol.STATUS_RESPONSE_SIZE,
         ) ?: return
-        val status = MosconiProtocol.parseStatusResponse(response.map { it.toInt() and 0xFF }.toIntArray()) ?: return
+        val status = MosconiProtocol.parseStatusResponse(response.map { it.toInt() and 0xFF }.toIntArray())
+        if (status == null) {
+            Log.d(TAG, "pollStatusOnce: got ${response.size} bytes but parseStatusResponse rejected them")
+            return
+        }
         lastStatusByte = status.statusByte
         applyStatusResponse(status)
     }
@@ -428,3 +434,5 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         const val PAUSE_READS_AFTER_EDIT_MS = 3000L
     }
 }
+
+private const val TAG = "MosconiBT"
