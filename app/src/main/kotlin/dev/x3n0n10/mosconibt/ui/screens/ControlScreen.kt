@@ -91,6 +91,7 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onBalanceChange,
+                showCenterMark = true,
             )
             LabeledSlider(
                 label = "Fader (front ↔ rear)",
@@ -98,6 +99,7 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onFaderChange,
+                showCenterMark = true,
             )
 
             Spacer(Modifier.height(28.dp))
@@ -250,6 +252,7 @@ private fun LabeledSlider(
     valueRange: IntRange,
     enabled: Boolean,
     onValueChange: (Int) -> Unit,
+    showCenterMark: Boolean = false,
 ) {
     val labelColor = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -261,12 +264,28 @@ private fun LabeledSlider(
                 color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { onValueChange(it.toInt()) },
-            valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-            steps = (valueRange.last - valueRange.first - 1).coerceAtLeast(0),
-            enabled = enabled,
-        )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Slider(
+                value = value.toFloat(),
+                onValueChange = { onValueChange(it.toInt()) },
+                valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                steps = (valueRange.last - valueRange.first - 1).coerceAtLeast(0),
+                enabled = enabled,
+            )
+            if (showCenterMark) {
+                // A landmark tick at the midpoint, not a snap point - Balance/Fader
+                // rest there by default, so it's worth being able to see (and land
+                // back on) without staring at the numeric readout above. Drawn on top
+                // of the slider so it only shows in the track's transparent margin -
+                // it visually "hides" under the thumb exactly when centered.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .width(2.dp)
+                        .height(16.dp)
+                        .background(MaterialTheme.colorScheme.outline),
+                )
+            }
+        }
     }
 }
