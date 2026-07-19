@@ -1,0 +1,121 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol-tests:
+    name: Protocol unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run protocol tests
+        run: ./gradlew :protocol:test --stacktrace
+
+      - name: Upload protocol test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: protocol-test-report
+          path: protocol/build/reports/tests/test
+          retention-days: 7
+          if-no-files-found: ignore
+
+  build-apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow clone: versionCode is derived from
+          # `git rev-list --count HEAD` (see app/build.gradle.kts) so every build gets a
+          # strictly increasing version - a shallow clone would make that always resolve
+          # to 1, breaking installs of a newer APK over an older one.
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mosconi-bt-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Upload build reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-build-reports
+          path: app/build/reports
+          retention-days: 7
+          if-no-files-found: ignore
+
+  screenshot-tests:
+    name: Screenshot regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify screenshots (app/src/test/snapshots)
+        run: ./gradlew :app:verifyPaparazziDebug --stacktrace
+
+      - name: Upload screenshot diff report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paparazzi-diff-report
+          path: app/build/reports/paparazzi
+          retention-days: 7
+          if-no-files-found: ignore
