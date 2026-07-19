@@ -76,9 +76,9 @@ fun ControlScreen(
             )
 
             Spacer(Modifier.height(28.dp))
-            SectionLabel("Sub")
+            SectionLabel("Subwoofer")
             LabeledSlider(
-                label = "Sub level",
+                label = "Level",
                 value = state.subLevel,
                 valueRange = 0..MosconiProtocol.SUB_STEPS,
                 enabled = controlsEnabled,
@@ -86,7 +86,7 @@ fun ControlScreen(
             )
 
             Spacer(Modifier.height(28.dp))
-            SectionLabel("Balance / Fader")
+            SectionLabel("Listening position")
             LabeledSlider(
                 label = "Balance (left ↔ right)",
                 value = state.balance,
@@ -96,11 +96,17 @@ fun ControlScreen(
                 centerValue = MosconiProtocol.BALANCE_FADER_STEPS / 2,
             )
             LabeledSlider(
-                label = "Fader (front ↔ rear)",
-                value = state.fader,
+                label = "Fader (rear ↔ front)",
+                // Displayed mirrored from the underlying domain value: the DSP/protocol
+                // side keeps position 0 = front (see MosconiProtocol.State.setFader's
+                // doc comment - real-hardware-confirmed), but this slider shows rear on
+                // the left and front on the right, so flip for display only and flip
+                // back on edit. The center mark stays put either way since the range is
+                // symmetric around its midpoint.
+                value = MosconiProtocol.BALANCE_FADER_STEPS - state.fader,
                 valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
                 enabled = controlsEnabled,
-                onValueChange = onFaderChange,
+                onValueChange = { onFaderChange(MosconiProtocol.BALANCE_FADER_STEPS - it) },
                 centerValue = MosconiProtocol.BALANCE_FADER_STEPS / 2,
             )
 
