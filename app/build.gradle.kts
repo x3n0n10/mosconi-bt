@@ -1,8 +1,26 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("app.cash.paparazzi")
 }
+
+/**
+ * Release signing is deliberately kept out of source control and CI - this project has
+ * no automated release pipeline; whoever builds a signed release APK does it locally.
+ * These four keys go in the same gitignored `local.properties` Android Studio already
+ * uses for `sdk.dir` (see README's "Building a release APK" section for the one-time
+ * `keytool` command to generate a real keystore). If they're absent, the `release`
+ * build type is simply left unsigned rather than failing the build, so `assembleDebug`/
+ * tests/CI are never affected by whether a release keystore happens to be configured.
+ */
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun localProperty(key: String): String? = localProperties.getProperty(key)?.takeIf { it.isNotBlank() }
 
 /**
  * Total commit count on the current branch, used as versionCode below. This app is
@@ -53,12 +71,25 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            localProperty("release.storeFile")?.let { storeFile = file(it) }
+            storePassword = localProperty("release.storePassword")
+            keyAlias = localProperty("release.keyAlias")
+            keyPassword = localProperty("release.keyPassword")
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Only sign if a real keystore is actually configured (see localProperty
+            // above) - otherwise leave this build type unsigned rather than failing
+            // assembleRelease outright for anyone who hasn't set one up yet.
+            if (localProperty("release.storeFile") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
