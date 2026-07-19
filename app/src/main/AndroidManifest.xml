@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- The DSP's Bluetooth module is classic BT (RFCOMM/SPP), not BLE, but we
          declare this so the app still shows up for devices/users that filter
