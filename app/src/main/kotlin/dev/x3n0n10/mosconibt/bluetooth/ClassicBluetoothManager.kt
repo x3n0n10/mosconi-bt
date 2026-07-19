@@ -40,7 +40,11 @@ sealed interface BtConnectionState {
  * Every call that touches the adapter or a [BluetoothDevice]'s identifying info requires
  * `BLUETOOTH_CONNECT` (Android 12+/API 31+) to already be granted; callers are expected to
  * have checked that via the UI layer first, matching how the rest of this codebase treats
- * runtime permissions as a UI concern, not a transport concern.
+ * runtime permissions as a UI concern, not a transport concern. This class deliberately
+ * never calls [BluetoothAdapter.cancelDiscovery] or otherwise touches discovery - only
+ * `bondedDevices()` and connecting to an already-paired device - since that's a *different*
+ * dangerous permission (`BLUETOOTH_SCAN`) this app doesn't declare/request; calling it
+ * crashes with a SecurityException instead of merely no-op'ing.
  *
  * There's exactly one RFCOMM socket, so writes (from slider drags) and status reads (from
  * polling) share one input/output stream pair. [ioMutex] serializes every transaction so a
@@ -94,7 +98,6 @@ class ClassicBluetoothManager(context: Context) {
             return@withContext
         }
         try {
-            currentAdapter.cancelDiscovery()
             val sock = device.createRfcommSocketToServiceRecord(UUID.fromString(MosconiProtocol.SPP_UUID))
             // Assigned before connect() returns so a concurrent cancel/disconnect can close
             // (and thereby interrupt) this specific socket while it's still blocking.
