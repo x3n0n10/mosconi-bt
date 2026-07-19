@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.x3n0n10.mosconibt.ThemeMode
+import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.ResponsiveContent
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,9 +31,13 @@ fun SettingsScreen(
     hapticFeedback: Boolean,
     themeMode: ThemeMode,
     rememberedDeviceLabel: String?,
+    presetNames: List<String?>,
+    presetsEnabled: List<Boolean>,
+    activePreset: Int,
     onHapticToggle: (Boolean) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
     onForgetDevice: () -> Unit,
+    onPresetEnabledChange: (index: Int, enabled: Boolean) -> Unit,
 ) {
     ResponsiveContent(scrollable = true) {
         Column(modifier = Modifier.padding(24.dp)) {
@@ -50,7 +55,34 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(28.dp))
+            SettingsSectionLabel("Presets")
+            Text(
+                "Disable a slot to hide it from quick-select on the main screen - a " +
+                    "safety guard against accidentally activating an unprogrammed " +
+                    "preset. The active preset can't be disabled.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
             HorizontalDivider()
+            for (index in 0 until MosconiProtocol.PRESET_COUNT) {
+                val isActive = index == activePreset
+                val isEnabled = presetsEnabled.getOrElse(index) { true }
+                val customName = presetNames.getOrNull(index)?.takeUnless { it.isBlank() }
+                SettingsRow(
+                    title = if (customName != null) "P${index + 1} — $customName" else "P${index + 1}",
+                    description = when {
+                        isActive -> "Currently active - can't be disabled"
+                        isEnabled -> "Enabled"
+                        else -> "Disabled"
+                    },
+                ) {
+                    Switch(checked = isEnabled, onCheckedChange = { onPresetEnabledChange(index, it) }, enabled = !isActive)
+                }
+                HorizontalDivider()
+            }
+
+            Spacer(Modifier.height(28.dp))
             SettingsRow(
                 title = "Touch feedback",
                 description = "Vibrate briefly when a control changes",

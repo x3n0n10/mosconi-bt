@@ -71,6 +71,7 @@ fun ControlScreen(
                 selected = state.selectedPreset,
                 names = state.presetNames,
                 enabled = controlsEnabled,
+                presetsEnabled = state.presetsEnabled,
                 onPresetSelected = onPresetSelected,
             )
 
@@ -210,17 +211,32 @@ private const val FLAT_TONE_VALUE = 8
  * themselves always stay identically shaped/sized (just "P<n>", nothing content-
  * dependent) - a non-blank custom name renders as its own label *below* the chip,
  * clipped to that chip's column width so neighbors can never overlap.
+ *
+ * [presetsEnabled] is the local-only "enable preset" safety gate (see
+ * [dev.x3n0n10.mosconibt.MosconiPrefs.isPresetEnabled]) - a disabled slot's chip is
+ * greyed out and unselectable, same as the device-not-synced [enabled] gate, except
+ * the *currently selected* preset is always shown enabled regardless of its stored
+ * flag: settings can't disable the active preset, but a physical-knob change on the
+ * device could still make a locally-disabled slot become the active one.
  */
 @Composable
-private fun PresetRow(selected: Int, names: List<String?>, enabled: Boolean, onPresetSelected: (Int) -> Unit) {
+private fun PresetRow(
+    selected: Int,
+    names: List<String?>,
+    enabled: Boolean,
+    presetsEnabled: List<Boolean>,
+    onPresetSelected: (Int) -> Unit,
+) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (index in 0 until MosconiProtocol.PRESET_COUNT) {
             val customName = names.getOrNull(index)?.takeUnless { it.isBlank() }
+            val isSelected = selected == index
+            val presetEnabled = isSelected || presetsEnabled.getOrElse(index) { true }
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 FilterChip(
                     modifier = Modifier.fillMaxWidth(),
-                    selected = selected == index,
-                    enabled = enabled,
+                    selected = isSelected,
+                    enabled = enabled && presetEnabled,
                     onClick = { onPresetSelected(index) },
                     label = {
                         Text(

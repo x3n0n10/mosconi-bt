@@ -40,6 +40,17 @@ class MosconiPrefs(context: Context) {
         get() = prefs.getString(KEY_LAST_DEVICE, null)
         set(value) = prefs.edit().putString(KEY_LAST_DEVICE, value).apply()
 
+    /** Local-only safety gate mirroring the factory app's "Enable Preset" toggles -
+     *  purely a UI guard against activating an unprogrammed preset slot, never sent
+     *  to the DSP. Defaults to enabled so a fresh install behaves like every preset
+     *  is usable, matching the factory app's default. */
+    fun isPresetEnabled(index: Int): Boolean = prefs.getBoolean(presetEnabledKey(index), true)
+
+    fun setPresetEnabled(index: Int, enabled: Boolean) =
+        prefs.edit().putBoolean(presetEnabledKey(index), enabled).apply()
+
+    private fun presetEnabledKey(index: Int) = "preset_enabled_$index"
+
     private inner class IntPref(private val key: String, private val default: Int) {
         operator fun getValue(thisRef: Any?, property: KProperty<*>): Int = prefs.getInt(key, default)
         operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {

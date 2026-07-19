@@ -148,9 +148,13 @@ fun MosconiApp(viewModel: MosconiViewModel, ui: ControlUiState) {
                         hapticFeedback = ui.hapticFeedback,
                         themeMode = ui.themeMode,
                         rememberedDeviceLabel = rememberedDeviceLabel,
+                        presetNames = ui.presetNames,
+                        presetsEnabled = ui.presetsEnabled,
+                        activePreset = ui.selectedPreset,
                         onHapticToggle = viewModel::onHapticFeedbackToggle,
                         onThemeModeChange = viewModel::onThemeModeChange,
                         onForgetDevice = { viewModel.forgetDevice() },
+                        onPresetEnabledChange = viewModel::onPresetEnabledChange,
                     )
                 }
                 ui.isConnected -> ControlScreen(

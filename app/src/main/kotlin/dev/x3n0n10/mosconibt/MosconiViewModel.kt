@@ -49,6 +49,11 @@ data class ControlUiState(
      *  never writes them). A null slot means no custom name is set on the device, or it
      *  hasn't been read yet; the UI should fall back to a generic "P<n>" label. */
     val presetNames: List<String?> = List(MosconiProtocol.PRESET_COUNT) { null },
+    /** Local-only "enable preset" safety gate per slot - see [MosconiPrefs.isPresetEnabled].
+     *  A disabled preset can't be selected on the control screen; the currently
+     *  active preset can never be disabled (enforced by disabling its own toggle in
+     *  settings), so this list can never end up excluding [selectedPreset]. */
+    val presetsEnabled: List<Boolean> = List(MosconiProtocol.PRESET_COUNT) { true },
     /** Wall-clock time of the last successfully parsed status read, or null if never. */
     val lastSyncedAtMillis: Long? = null,
     /** Wall-clock time of the last local slider/button edit, or null if none this session. */
@@ -94,6 +99,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
             hapticFeedback = prefs.hapticFeedback,
             themeMode = prefs.themeMode,
             rememberedDeviceAddress = prefs.lastDeviceAddress,
+            presetsEnabled = List(MosconiProtocol.PRESET_COUNT) { prefs.isPresetEnabled(it) },
         ),
     )
     val ui: StateFlow<ControlUiState> = _ui.asStateFlow()
@@ -357,6 +363,16 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         _ui.update { it.copy(themeMode = mode) }
     }
 
+    /** No-ops for the currently active preset - its own toggle is disabled in the
+     *  settings UI, but this guards the state update too in case of a stale click. */
+    fun onPresetEnabledChange(index: Int, enabled: Boolean) {
+        if (index == _ui.value.selectedPreset) return
+        prefs.setPresetEnabled(index, enabled)
+        _ui.update {
+            it.copy(presetsEnabled = it.presetsEnabled.toMutableList().also { list -> list[index] = enabled })
+        }
+    }
+
     fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {
         prefs.volumeTarget = target
         _ui.update { it.copy(volumeTarget = target) }
@@ -401,6 +417,9 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun onPresetSelected(index: Int) {
+        // The preset chip is already disabled in the UI for a disabled slot; guard
+        // here too rather than trusting that alone.
+        if (!_ui.value.presetsEnabled.getOrElse(index) { true }) return
         prefs.selectedPreset = index
         updateAndSend({ it.copy(selectedPreset = index) }, packetState.selectPreset(index), strong = true)
     }

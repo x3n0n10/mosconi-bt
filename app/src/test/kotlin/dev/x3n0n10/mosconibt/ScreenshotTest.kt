@@ -173,6 +173,26 @@ class ScreenshotTest {
     }
 
     @Test
+    fun controlScreen_withDisabledPreset_isGreyedOut() {
+        paparazzi.snapshot {
+            AppRoot {
+                ControlScreen(
+                    state = sampleControlState.copy(presetsEnabled = listOf(true, true, false, true)),
+                    onVolumeChange = {},
+                    onVolumeTargetChange = {},
+                    onSubChange = {},
+                    onBalanceChange = {},
+                    onFaderChange = {},
+                    onTrebleChange = {},
+                    onMidChange = {},
+                    onBassChange = {},
+                    onPresetSelected = {},
+                )
+            }
+        }
+    }
+
+    @Test
     fun settingsScreen_withRememberedDevice() {
         paparazzi.snapshot {
             AppRoot {
@@ -180,9 +200,13 @@ class ScreenshotTest {
                     hapticFeedback = true,
                     themeMode = ThemeMode.SYSTEM,
                     rememberedDeviceLabel = "MOSCONI PICO 6|8",
+                    presetNames = listOf("Daily", "Highway", null, "Bass Boost"),
+                    presetsEnabled = listOf(true, true, false, true),
+                    activePreset = 1,
                     onHapticToggle = {},
                     onThemeModeChange = {},
                     onForgetDevice = {},
+                    onPresetEnabledChange = { _, _ -> },
                 )
             }
         }
@@ -196,9 +220,13 @@ class ScreenshotTest {
                     hapticFeedback = false,
                     themeMode = ThemeMode.DARK,
                     rememberedDeviceLabel = null,
+                    presetNames = listOf(null, null, null, null),
+                    presetsEnabled = listOf(true, true, true, true),
+                    activePreset = 0,
                     onHapticToggle = {},
                     onThemeModeChange = {},
                     onForgetDevice = {},
+                    onPresetEnabledChange = { _, _ -> },
                 )
             }
         }

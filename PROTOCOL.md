@@ -337,8 +337,12 @@ These UI elements only affect the App Inventor `TinyDB` local key-value store (i
 - The "Feedback" switch — controls local vibration-on-drag only.
 
 This project's replacement app keeps local persistence for slider positions
-(mirroring `TinyDB`) but drops the preset-enable gate as unnecessary complexity now
-that the UI uses direct tap-to-select instead of App Inventor's canvas-drag paradigm.
+(mirroring `TinyDB`) and reimplements the per-preset enable gate too (see
+`MosconiPrefs.isPresetEnabled` / the Settings screen's Presets section) — a disabled
+slot's chip is greyed out and unselectable on the main screen, same intent as the
+factory app's version, just via a switch instead of a long-press-to-toggle gesture.
+The currently active preset can't be disabled (its switch is itself disabled while
+active), so there's no state where the selected preset is also marked disabled.
 
 ## Confidence & open questions
 
