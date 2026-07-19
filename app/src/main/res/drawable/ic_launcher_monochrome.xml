@@ -20,10 +20,14 @@
         android:fillColor="#00000000"
         android:strokeColor="#000000"
         android:strokeWidth="2" />
-    <path
-        android:pathData="M72,52 L80,58 L72,64 L80,70 L72,76 M72,52 L80,70 M72,76 L80,58"
-        android:strokeColor="#000000"
-        android:strokeWidth="2.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+    <!-- Same Material Symbols "bluetooth" glyph + transform as ic_launcher_foreground.xml. -->
+    <group
+        android:translateX="61.8"
+        android:translateY="53.8"
+        android:scaleX="0.85"
+        android:scaleY="0.85">
+        <path
+            android:fillColor="#000000"
+            android:pathData="M17.71,7.71L12,2h-1v7.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L11,14.41V22h1l5.71,-5.71l-4.3,-4.29zM13,5.83l1.88,1.88L13,9.59zm1.88,10.46L13,18.17v-3.76z" />
+    </group>
 </vector>
