@@ -114,7 +114,7 @@ two command families this is.
 | 2 | Volume level | looked up from `LOG_VOLUME_TABLE` (see below) | main Volume slider |
 | 3 | Sub level | 0–15, raw | Sub slider |
 | 4 | Balance (left↔right) | 48 + (0–32) → 48–80 | Balance slider |
-| 5 | Fader (front↔rear) | 48 + (0–32) → 48–80 | Fader slider |
+| 5 | Fader (front↔rear) | 48 + (32 − UI position) → 48–80 | Fader slider |
 | 6 | Preset index | 0–3 | Preset buttons P1–P4 |
 | 7 | Target flag | `0x00` = output volume, `0x80` = input/CAN-bus volume | Input/Output switch |
 
@@ -124,6 +124,13 @@ alone (its blocks just called them "Geo X/Y"). The Windows GUI's own slider labe
 (`"Balance"`, `"Fader"`) and its confirmed min/default/max (49/64/79, vs. this
 project's 48/64/80 — a one-off rounding difference at the edges, not a different
 scale) settled it.
+
+**Confirmed against real hardware:** the Fader's raw byte runs the opposite direction
+from what this app's UI slider position naively implied - the app inverts it (`48 +
+(32 − position)` instead of `48 + position`) so that "position 0" on the slider
+labeled "front ↔ rear" actually produces front, matching the label, rather than
+rear. Balance needed no such flip. See `MosconiProtocol.State.setFader` and its
+matching read-side inversion in `parseStatusResponse`'s fader extraction.
 
 The app keeps **two independent 8-byte buffers** for this command — one for
 "output volume" mode (`TARGET=0x00`) and one for "input volume" mode (`TARGET=0x80`).

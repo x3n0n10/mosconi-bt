@@ -58,8 +58,9 @@ class MosconiProtocolTest {
 
         assertEquals(listOf(8, 0x43, 0, 5, 64, 64, 0, 0x00), state.setSub(5).toList())
         assertEquals(listOf(8, 0x43, 0, 5, 80, 64, 0, 0x00), state.setBalance(32).toList())
-        assertEquals(listOf(8, 0x43, 0, 5, 80, 48, 0, 0x00), state.setFader(0).toList())
-        assertEquals(listOf(8, 0x43, 0, 5, 80, 48, 3, 0x00), state.selectPreset(3).toList())
+        // position 0 = full front, transmitted inverted (48 + (32 - 0) = 80) - see setFader's doc comment.
+        assertEquals(listOf(8, 0x43, 0, 5, 80, 80, 0, 0x00), state.setFader(0).toList())
+        assertEquals(listOf(8, 0x43, 0, 5, 80, 80, 3, 0x00), state.selectPreset(3).toList())
     }
 
     @Test
@@ -76,7 +77,8 @@ class MosconiProtocolTest {
         assertEquals(0, state.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, 999)[2])
         assertEquals(0, state.setSub(-5)[3])
         assertEquals(48, state.setBalance(-1)[4])
-        assertEquals(48 + MosconiProtocol.BALANCE_FADER_STEPS, state.setFader(999)[5])
+        // position clamps to BALANCE_FADER_STEPS (full rear), which the inversion sends as raw 48.
+        assertEquals(48, state.setFader(999)[5])
     }
 
     @Test
@@ -121,7 +123,7 @@ class MosconiProtocolTest {
         info[5] = 0x00 // INFORMATION[6]: page-select bit clear -> balance/fader/sub page
         info[7] = MosconiProtocol.LOG_VOLUME_TABLE[20] // INFORMATION[8]: volume raw byte for slider step 20
         info[8] = 70 // INFORMATION[9]: balance raw (48+22)
-        info[9] = 50 // INFORMATION[10]: fader raw (48+2)
+        info[9] = 50 // INFORMATION[10]: fader raw (48+2), inverted on read -> UI position 30
         info[10] = 9 // INFORMATION[11]: sub level
 
         val frame = intArrayOf(0x07, 0xE9, 0, statusByte, *info, 0x0D)
@@ -132,7 +134,7 @@ class MosconiProtocolTest {
         assertEquals(20, parsed.volumeStep)
         val page = assertNotNull(parsed.page as? MosconiProtocol.InformationPage.VolumeControls)
         assertEquals(22, page.balance)
-        assertEquals(2, page.fader)
+        assertEquals(30, page.fader)
         assertEquals(9, page.sub)
     }
 

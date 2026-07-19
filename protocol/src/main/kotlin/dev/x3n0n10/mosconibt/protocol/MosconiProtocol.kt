@@ -134,9 +134,16 @@ object MosconiProtocol {
         fun setBalance(position: Int): IntArray =
             outputVolume.also { it[4] = 48 + position.coerceIn(0, BALANCE_FADER_STEPS) }.copyOf()
 
-        /** @param position 0..[BALANCE_FADER_STEPS] (0=full rear), transmitted as 48+position. */
+        /**
+         * @param position 0..[BALANCE_FADER_STEPS] (0=full front), transmitted as
+         * 48+([BALANCE_FADER_STEPS]-position) - inverted from the raw wire scale.
+         * Confirmed against real hardware that the DSP's raw byte runs the opposite
+         * direction from this UI's "front <-> rear" slider, so the flip happens here
+         * (and in the matching fader extraction in [parseStatusResponse]) rather than
+         * relabeling the slider, keeping "position 0 = front" true on both ends.
+         */
         fun setFader(position: Int): IntArray =
-            outputVolume.also { it[5] = 48 + position.coerceIn(0, BALANCE_FADER_STEPS) }.copyOf()
+            outputVolume.also { it[5] = 48 + (BALANCE_FADER_STEPS - position.coerceIn(0, BALANCE_FADER_STEPS)) }.copyOf()
 
         /** @param index 0..3, selecting preset P1..P4. */
         fun selectPreset(index: Int): IntArray =
@@ -237,7 +244,8 @@ object MosconiProtocol {
         val page = if (toggle == 0) {
             InformationPage.VolumeControls(
                 balance = (info(9) - 48).coerceIn(0, BALANCE_FADER_STEPS),
-                fader = (info(10) - 48).coerceIn(0, BALANCE_FADER_STEPS),
+                // Inverted to match setFader's front/rear flip - see its doc comment.
+                fader = (BALANCE_FADER_STEPS - (info(10) - 48)).coerceIn(0, BALANCE_FADER_STEPS),
                 sub = info(11).coerceIn(0, SUB_STEPS),
             )
         } else {
