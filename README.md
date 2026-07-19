@@ -74,6 +74,53 @@ After a UI change, update the golden images with:
 
 and commit the changed PNGs under `app/src/test/snapshots/images/`.
 
+### Building a release APK
+
+Debug builds (above) are unminified and signed with the shared, checked-in
+`debug.keystore` — fine for day-to-day sideloading, but noticeably larger than
+necessary (nothing shrinks unused code/resources out of the dependencies) and not
+signed with a key you actually control.
+
+```
+./gradlew :app:assembleRelease
+```
+
+turns on R8 minification and resource shrinking — no extra ProGuard rules needed,
+nothing in this app relies on reflection, so the defaults plus what AndroidX/Compose
+ship in their own consumer rules are enough (confirmed by inspecting
+`app/build/outputs/mapping/release/` for missing-rule warnings after a clean build:
+none). It shrinks the APK from ~22MB down to under 2MB.
+
+To get a *signed*, directly installable APK out of that instead of
+`app-release-unsigned.apk`, generate your own release keystore once — **do not** reuse
+`debug.keystore` for this:
+
+```
+keytool -genkeypair -v -keystore mosconi-bt-release.keystore -alias mosconi-bt \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+then add these four keys to your own `local.properties` (already gitignored, sits
+alongside the `sdk.dir` Android Studio puts there — never commit a real release
+keystore or its passwords):
+
+```
+release.storeFile=/absolute/path/to/mosconi-bt-release.keystore
+release.storePassword=...
+release.keyAlias=mosconi-bt
+release.keyPassword=...
+```
+
+`./gradlew :app:assembleRelease` then produces a signed
+`app/build/outputs/apk/release/app-release.apk`, installable like any other APK
+(`adb install`, or just copying it to the phone). Without those four keys set, the
+same command still succeeds but leaves the output unsigned instead of failing.
+
+**Back up that keystore and its passwords somewhere safe.** Android refuses to install
+an update signed with a different key over an existing install, so losing it means
+every future release is a fresh reinstall (losing all local prefs) rather than an
+in-place update — there's no recovery path if it's gone.
+
 Open the project root in Android Studio (Koala or newer) and it will pick up both
 modules automatically. `:app` needs `compileSdk 34` / a recent Android SDK installed
 via Android Studio's SDK Manager.
