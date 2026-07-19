@@ -337,12 +337,15 @@ in `MosconiProtocolTest.kt`), which resolved the two issues that used to be list
 here as open (response frame length, and the ambiguous `USERDATA_LOAD` response
 length formula — both are now confirmed, see above).
 
-What's left as genuine assumptions still to verify against real hardware:
+**Confirmed against real hardware:** the Volume slider's direction. `LOG_VOLUME_TABLE`
+is indexed so the rightmost/max slider position (step 35) maps to raw `0`; testing
+against a real PICO V2 6|8 set to full volume on both the input and output channels
+confirmed the slider reads correctly at its rightmost position in both modes, so no
+reversal is needed.
 
-1. **Which end of the Volume slider is loud.** Both apps' UI code shows *a* slider
-   position maps to *a* table index, but not which physical direction the original
-   artwork/labels implied. If it's backwards, reverse `LOG_VOLUME_TABLE`.
-2. **Whether the status-response "page toggle" bit really alternates autonomously on
+What's left as a genuine assumption still to verify against real hardware:
+
+1. **Whether the status-response "page toggle" bit really alternates autonomously on
    the device** between successive `INFORMATION_LOAD` polls, as opposed to depending
    on the echoed status byte in the request — which only starts reflecting real
    device state once a poll has successfully parsed at least once, so this couldn't be

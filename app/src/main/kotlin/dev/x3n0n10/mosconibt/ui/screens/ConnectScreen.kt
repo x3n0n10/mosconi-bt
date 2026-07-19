@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,8 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.x3n0n10.mosconibt.R
 import dev.x3n0n10.mosconibt.bluetooth.BtConnectionState
 import dev.x3n0n10.mosconibt.bluetooth.BtDevice
 import dev.x3n0n10.mosconibt.ui.ResponsiveContent
@@ -46,6 +46,9 @@ fun ConnectScreen(
     onConnect: (BtDevice) -> Unit,
     onCancelAutoConnect: () -> Unit,
 ) {
+    val bluetoothIcon = ImageVector.vectorResource(R.drawable.ic_bluetooth)
+    val bluetoothDisabledIcon = ImageVector.vectorResource(R.drawable.ic_bluetooth_disabled)
+
     ResponsiveContent {
         Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
             Text("Mosconi DSP", style = MaterialTheme.typography.headlineMedium)
@@ -58,20 +61,20 @@ fun ConnectScreen(
 
             when {
                 !bluetoothAvailable -> StatusMessage(
-                    icon = Icons.Filled.BluetoothDisabled,
+                    icon = bluetoothDisabledIcon,
                     title = "No Bluetooth adapter",
                     message = "This device doesn't support Bluetooth.",
                 )
 
                 !hasBluetoothPermission -> StatusMessage(
-                    icon = Icons.Filled.Bluetooth,
+                    icon = bluetoothIcon,
                     title = "Bluetooth permission needed",
                     message = "To see and connect to your DSP, allow Bluetooth access.",
                     action = { Button(onClick = onRequestPermission) { Text("Grant permission") } },
                 )
 
                 !bluetoothEnabled -> StatusMessage(
-                    icon = Icons.Filled.BluetoothDisabled,
+                    icon = bluetoothDisabledIcon,
                     title = "Bluetooth is off",
                     message = "Turn on Bluetooth, then refresh this list.",
                     action = { OutlinedButton(onClick = onRefresh) { Text("Refresh") } },
@@ -109,7 +112,7 @@ fun ConnectScreen(
 
                     if (devices.isEmpty()) {
                         StatusMessage(
-                            icon = Icons.Filled.Bluetooth,
+                            icon = bluetoothIcon,
                             title = "No paired devices",
                             message = "Pair with your DSP's Bluetooth module in Android's " +
                                 "Bluetooth settings first (it usually shows up as something " +
@@ -126,7 +129,7 @@ fun ConnectScreen(
                                     supportingContent = {
                                         Text(device.address, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     },
-                                    leadingContent = { Icon(Icons.Filled.Bluetooth, contentDescription = null) },
+                                    leadingContent = { Icon(bluetoothIcon, contentDescription = null) },
                                     trailingContent = {
                                         Button(
                                             onClick = { onConnect(device) },

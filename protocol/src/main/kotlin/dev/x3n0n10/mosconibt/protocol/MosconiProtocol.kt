@@ -21,8 +21,11 @@ package dev.x3n0n10.mosconibt.protocol
  * frames are built), and - contrary to every request in this protocol - response
  * checksums are a plain byte-sum mod 256, not [Crc8]. See [Sum8] and PROTOCOL.md.
  *
- * Remaining ASSUMPTIONS still to verify against real hardware:
- *  - Which end of the volume slider is loud vs. quiet ([LOG_VOLUME_TABLE] order).
+ * [LOG_VOLUME_TABLE]'s direction (rightmost/max slider position = loudest) is also
+ * confirmed against real hardware: full volume on both the input and output channels
+ * reads back correctly at the slider's rightmost position.
+ *
+ * Remaining ASSUMPTION still to verify against real hardware:
  *  - Whether [StatusResponse]'s "page toggle" bit really alternates
  *    autonomously on the device between successive status polls, as opposed to
  *    depending on the echoed status byte in the request (which only starts
