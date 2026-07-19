@@ -23,9 +23,13 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
-# Keystore files
+# Keystore files - except the shared debug-signing keystore, committed deliberately so
+# every build (CI and local) produces mutually-upgradable debug APKs. It's never used to
+# sign anything trusted/distributed, so committing it carries none of the risk a real
+# release keystore would.
 *.jks
 *.keystore
+!app/debug.keystore
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json

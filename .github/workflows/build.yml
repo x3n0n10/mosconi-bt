@@ -46,6 +46,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow clone: versionCode is derived from
+          # `git rev-list --count HEAD` (see app/build.gradle.kts) so every build gets a
+          # strictly increasing version - a shallow clone would make that always resolve
+          # to 1, breaking installs of a newer APK over an older one.
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

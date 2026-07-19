@@ -4,6 +4,29 @@ plugins {
     id("app.cash.paparazzi")
 }
 
+/**
+ * Total commit count on the current branch, used as versionCode below. This app is
+ * distributed as CI-built debug APKs rather than through a store, so a hand-maintained
+ * version number would inevitably get forgotten - deriving it from git history instead
+ * guarantees every build is a strictly higher versionCode than the last (required for
+ * Android to treat installing a newer APK as an update rather than a conflict), with no
+ * manual bookkeeping. CI's checkout step needs `fetch-depth: 0` for this to see the
+ * real count rather than a shallow clone's `1`; falls back to 1 if git isn't available
+ * at all (e.g. a source archive with no `.git` directory).
+ */
+fun gitCommitCount(): Int = try {
+    val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+        .directory(rootDir)
+        .redirectErrorStream(true)
+        .start()
+    process.waitFor()
+    process.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 1
+} catch (e: Exception) {
+    1
+}
+
+val appVersionCode = gitCommitCount()
+
 android {
     namespace = "dev.x3n0n10.mosconibt"
     compileSdk = 34
@@ -12,8 +35,24 @@ android {
         applicationId = "dev.x3n0n10.mosconibt"
         minSdk = 33
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = "0.1.0+$appVersionCode"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // Fixed, checked-in debug keystore (app/debug.keystore) instead of AGP's
+            // implicit per-machine default: CI runs on fresh, ephemeral VMs with no
+            // pre-existing ~/.android/debug.keystore, so without this every CI build
+            // would get a different random signing certificate - and Android refuses to
+            // install an APK over an existing install signed with a different
+            // certificate, forcing an uninstall before every single update. Carries none
+            // of the risk a real release keystore would; never used for anything trusted.
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
