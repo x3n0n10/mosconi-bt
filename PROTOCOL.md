@@ -209,12 +209,18 @@ checksum byte, the same convention [write frames](#write-protocol-frame-format) 
   - bit clear → Balance, Fader, Sub level (raw bytes, same scale as the write side)
   - bit set → Bass, Mid, Treble (raw `0–15`)
 
-  The DSP appears to alternate which page it reports across successive polls (this
-  project never sends a page selector, matching what the Windows GUI does) — poll at
-  least twice to see both. This app polls once a second while connected and merges
-  whichever page shows up into local state, so it converges within ~2 seconds of
-  connecting and stays live thereafter (e.g. turning the physical Sub-level knob shows
-  up in-app on the next poll or two).
+  **Confirmed against real hardware** that this is autonomous, not something this
+  project's request needs to control: a ~45-second capture with the app's echoed
+  status byte pinned to a single constant value the entire time still showed the page
+  bit varying, so it's driven by the DSP's own internal state, not anything sent to
+  it (matching the Windows GUI, which also never sends a page selector). It doesn't
+  strictly alternate 1:1 with each poll, though - in that capture ~29% of consecutive
+  polls landed on the same page again (max observed run: 3 in a row), so it's on its
+  own clock that isn't tightly synced to this app's 1-second poll interval. This app
+  polls once a second while connected and merges whichever page shows up into local
+  state regardless, so it still converges (just occasionally taking a few seconds
+  rather than ~2) and stays live thereafter (e.g. turning the physical Sub-level knob
+  shows up in-app within a handful of polls).
 
 There's also a separate, heavier **bulk EEPROM read** (`USERDATA_LOAD`/`FLOWDATA_LOAD`,
 command byte `0x45` sub-selecting memory pages via byte 5 = `0xA2`/`0xA0`) that the
@@ -343,16 +349,16 @@ against a real PICO V2 6|8 set to full volume on both the input and output chann
 confirmed the slider reads correctly at its rightmost position in both modes, so no
 reversal is needed.
 
-What's left as a genuine assumption still to verify against real hardware:
+**Confirmed against real hardware:** the status-response "page toggle" bit
+(`INFORMATION_LOAD`'s `INFO[6]` bit 7 — see [above](#response-26-bytes-on-the-wire))
+alternates autonomously on the device, not in response to anything this app sends. A
+~45-second capture with the app's echoed status byte pinned to one constant value the
+entire time still showed the page varying, which rules out a request-side dependency.
+It isn't tightly synced to this app's 1-second poll rate though - the same capture
+showed occasional repeats (max observed run: 3 consecutive polls on the same page), so
+no page-selector byte is needed, but don't assume strict 1:1 alternation either.
 
-1. **Whether the status-response "page toggle" bit really alternates autonomously on
-   the device** between successive `INFORMATION_LOAD` polls, as opposed to depending
-   on the echoed status byte in the request — which only starts reflecting real
-   device state once a poll has successfully parsed at least once, so this couldn't be
-   properly exercised until the checksum/length fix above. If it turns out to need
-   explicit selection instead, the poll loop needs a page-selector byte added to
-   `buildStatusRequest`.
-
-See the doc comments in
+No remaining assumptions from the original decompile-only reconstruction are open at
+this point - see the doc comments in
 `protocol/src/main/kotlin/dev/x3n0n10/mosconibt/protocol/MosconiProtocol.kt` for the
-code-level detail behind each.
+code-level detail behind each confirmed finding above.

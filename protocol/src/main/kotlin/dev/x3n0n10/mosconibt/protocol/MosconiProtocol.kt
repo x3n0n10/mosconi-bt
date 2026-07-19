@@ -25,11 +25,12 @@ package dev.x3n0n10.mosconibt.protocol
  * confirmed against real hardware: full volume on both the input and output channels
  * reads back correctly at the slider's rightmost position.
  *
- * Remaining ASSUMPTION still to verify against real hardware:
- *  - Whether [StatusResponse]'s "page toggle" bit really alternates
- *    autonomously on the device between successive status polls, as opposed to
- *    depending on the echoed status byte in the request (which only starts
- *    reflecting real device state once a poll has successfully parsed once).
+ * [StatusResponse]'s "page toggle" bit is likewise confirmed to alternate
+ * autonomously on the device, not in response to anything sent to it: a real capture
+ * with the request's echoed status byte pinned to one constant value the whole time
+ * still showed the page varying. It isn't tightly synced to a 1-second poll rate
+ * though (occasional repeats, up to 3 consecutive polls on the same page observed),
+ * so no page-selector byte is needed - just don't assume strict 1:1 alternation.
  *
  * Transport: classic Bluetooth RFCOMM/SPP (NOT BLE) using the standard SPP UUID.
  * Write frames (the `0x08`-prefixed short format) carry no checksum and get a
@@ -189,9 +190,12 @@ object MosconiProtocol {
     }
 
     /**
-     * One "page" of a status response. The DSP appears to alternate which page it
+     * One "page" of a status response. The DSP autonomously alternates which page it
      * reports on successive [buildStatusRequest] calls (bit 7 of the byte at offset 6
-     * of the 20-value info block selects the page) - poll at least twice to see both.
+     * of the 20-value info block selects the page), confirmed against real hardware -
+     * but not in strict lockstep with each poll, so don't assume exactly every other
+     * response flips; a handful of polls in a row can occasionally land on the same
+     * page.
      */
     sealed interface InformationPage {
         data class VolumeControls(val balance: Int, val fader: Int, val sub: Int) : InformationPage
