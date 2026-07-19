@@ -2,8 +2,10 @@
 
 Reverse-engineered from two independent sources: `Mos_DSP_control_App` (the factory
 Android app; write-only) and the official Windows tuning GUI (`MOSCONI GLADEN GUI
-V3_55_x64.exe`; adds read/status support). No live Bluetooth capture against real
-hardware was performed for either — see [Confidence](#confidence--open-questions).
+V3_55_x64.exe`; adds read/status support). The write side was purely decompiled,
+never live-tested. The read side started the same way, but has since been corrected
+against a live capture from a real PICO V2 6|8 — see
+[Confidence](#confidence--open-questions).
 
 ## How the apps were decompiled
 
@@ -84,8 +86,10 @@ methods, same answer.
 - Two framing styles coexist:
   - **Write frames** (`0x08`-prefixed, used by the Android app and reused here): fixed
     8 bytes, **no checksum**, get a single ack byte back that's never validated.
-  - **Read/status frames** (`0x07`-prefixed, from the Windows GUI): checksummed with a
-    CRC-8, get a longer structured response back.
+  - **Read/status frames** (`0x07`-prefixed, from the Windows GUI): *requests* are
+    checksummed with CRC-8; the longer structured *responses* they get back are
+    checksummed differently — a plain byte-sum, confirmed against real hardware. See
+    [CRC-8](#crc-8) and [Sum8](#sum8).
 
 ## Write protocol (frame format)
 
@@ -182,11 +186,17 @@ request is a short, CRC-8-checksummed frame; the reply is a longer structured on
 `STATUS` is the status byte from the most recently received response (0 if none yet).
 CRC8 is computed over the first 5 bytes — see [CRC-8](#crc-8) below.
 
-### Response (25 bytes on the wire)
+### Response (26 bytes on the wire)
 
 ```
-[0x07, 0xE9, ???, STATUS, INFO[1], INFO[2], ..., INFO[20], CRC8]
+[0x07, 0xE9, ???, STATUS, INFO[1], INFO[2], ..., INFO[20], 0x0D, SUM8]
 ```
+
+Confirmed against a real PICO V2 6|8: the response is **one byte longer** than the
+request-side framing alone would suggest — a `0x0D` terminator precedes the trailing
+checksum byte, the same convention [write frames](#write-protocol-frame-format) and
+[requests](#read-status-query-protocol) already use. The trailing checksum is a plain
+[byte-sum](#sum8), *not* CRC-8, despite every request in this protocol using CRC-8.
 
 - Byte 3 (`STATUS`) is present on **every** response frame of any kind, not just this
   one — bits 0–1 are the currently active preset (0-indexed here; the Windows GUI adds
@@ -225,7 +235,7 @@ preset chips — this app never writes them; renaming stays a Windows-GUI-only f
 
 ```
 Request  (10 bytes): [0x07, 0x45, 0x00, STATUS|0x10, 0xA2, ADRH, ADRL, COUNT, 0x0D, CRC8]
-Response (COUNT+10 bytes): [0x07, 0xC5, LEN_HINT, STATUS, 0xA2, ADRH, ADRL, COUNT, payload(COUNT+1 bytes), CRC8]
+Response (COUNT+11 bytes): [0x07, 0xC5, LEN_HINT, STATUS, 0xA2, ADRH, ADRL, COUNT, payload(COUNT+1 bytes), 0x0D, SUM8]
 ```
 
 - `ADRH`/`ADRL` split a 16-bit address; `COUNT` is zero-based (`COUNT+1` bytes come
@@ -240,18 +250,17 @@ Response (COUNT+10 bytes): [0x07, 0xC5, LEN_HINT, STATUS, 0xA2, ADRH, ADRL, COUN
   frame, so the receiving side can compute the total frame length up front. This
   resolves what used to be an open question here about that byte's purpose.
 
-**ASSUMPTION, unverified against real hardware:** the exact response length. It's
-derived from how the Windows GUI's `EEPROM_DATEN_RECEIVE` indexes the payload it
-copies out of `$UARTWERT` (bytes 9 through `9+COUNT`, 1-indexed) — but the GUI's own
-receive-length table (`$UARTWERT[3] + 11`) disagrees with that indexing by exactly one
-byte, and there's no way to resolve which is the bug (or whether both are "correct" for
-different reasons, e.g. a padding byte) without a live capture. This app requests all
-four names in one read (`userDataResponseSize(63)` bytes) and validates the reply with
-the same CRC-8 already used for [`INFORMATION_LOAD`](#crc-8); if the length guess is
-wrong the read simply times out and the UI falls back to the plain "P1"–"P4" labels —
-never a garbled or misaligned name. If a real device's response turns out to be one
-byte longer, add `1` to `userDataResponseSize` in `MosconiProtocol.kt` — everything
-else about the framing stays the same.
+**Confirmed against real hardware.** The response is `COUNT + 11` bytes: an 8-byte
+header, `COUNT + 1` payload bytes, a `0x0D` terminator, and a trailing [Sum8](#sum8)
+checksum — the same `[header, ..., terminator, checksum]` shape the status response
+uses. This settles what used to be a genuine ambiguity between two disagreeing pieces
+of the Windows GUI's own source: `EEPROM_DATEN_RECEIVE`'s payload indexing implied
+`COUNT + 10`, while its receive-length table (`$UARTWERT[3] + 11`) said `COUNT + 11`.
+The `+11` form was right all along. A real device's response, decoded with this
+formula, produced clean, correctly null-terminated ASCII preset names ("Carplace",
+"Zelf", "Anderen") plus the `0xFF` unset sentinel on the fourth slot — independently
+confirming both the length and the rest of the framing (address/count echo, payload
+offset) in one shot.
 
 ### PIN protection (not implemented — local Windows GUI lock, not a DSP control lock)
 
@@ -277,13 +286,32 @@ wondering why a PIN set in the Windows GUI has no visible effect in this app.
 
 ### CRC-8
 
-Read-frame checksums use the standard **CRC-8/MAXIM (DOW-CRC)** algorithm — poly
-`0x31` reflected, init `0x00`. The 256-entry table was transcribed verbatim from the
-Windows GUI's `CRC_CALC_COM` rather than re-derived from the polynomial, to guarantee
-a bit-for-bit match with the firmware; it was then confirmed against the standard's
+Every **request** this protocol sends (`INFORMATION_LOAD`, `USERDATA_LOAD`) is
+checksummed with the standard **CRC-8/MAXIM (DOW-CRC)** algorithm — poly `0x31`
+reflected, init `0x00`. The 256-entry table was transcribed verbatim from the Windows
+GUI's `CRC_CALC_COM` rather than re-derived from the polynomial, to guarantee a
+bit-for-bit match with the firmware; it was then confirmed against the standard's
 public check value (CRC-8/MAXIM of ASCII `"123456789"` = `0xA1`) in
 `MosconiProtocolTest.kt`, which independently confirms both the transcription and that
 this is indeed that well-known algorithm rather than a custom variant.
+
+**Responses do not use CRC-8** — see [Sum8](#sum8) below.
+
+### Sum8
+
+Every **response** this protocol receives (`INFORMATION_LOAD`'s status response,
+`USERDATA_LOAD`'s payload response) is checksummed with a much simpler algorithm: a
+plain sum of every preceding byte in the frame, masked to `0x00`–`0xFF`. This was
+*not* visible from decompiling either app — the Windows GUI never actually validates
+incoming checksums, it only computes them for outgoing requests — so it only came to
+light from a live capture against a real PICO V2 6|8: the original assumption that
+responses reused CRC-8 like requests do caused every read to fail to validate, which
+combined with the [1-byte frame-length miss](#response-26-bytes-on-the-wire) above to
+produce a slowly-accumulating stream desync (each under-read status poll left one
+stray byte in the input stream, which prepended itself onto the next read, growing by
+one byte every second). Reconstructing whole frames by concatenating several
+consecutive (contaminated) reads end-to-end and re-slicing at 26 bytes recovered clean
+frames; CRC-8 didn't match any of them, but a plain byte-sum matched every one tried.
 
 ## Not part of the wire protocol (local-only app state)
 
@@ -301,25 +329,27 @@ that the UI uses direct tap-to-select instead of App Inventor's canvas-drag para
 
 ## Confidence & open questions
 
-Reconstructed by reading two independently-compiled, decompiled apps and
-cross-checking them against each other — no live Bluetooth capture against a real DSP
-was done for either. What's left as genuine assumptions to verify against real
-hardware:
+Originally reconstructed purely by reading two independently-compiled, decompiled
+apps and cross-checking them against each other, with no live Bluetooth capture
+against a real DSP. The read/status side has since been corrected against a live
+capture from a real PICO V2 6|8 (see [Sum8](#sum8) and the real-frame regression test
+in `MosconiProtocolTest.kt`), which resolved the two issues that used to be listed
+here as open (response frame length, and the ambiguous `USERDATA_LOAD` response
+length formula — both are now confirmed, see above).
+
+What's left as genuine assumptions still to verify against real hardware:
 
 1. **Which end of the Volume slider is loud.** Both apps' UI code shows *a* slider
    position maps to *a* table index, but not which physical direction the original
    artwork/labels implied. If it's backwards, reverse `LOG_VOLUME_TABLE`.
 2. **Whether the status-response "page toggle" bit really alternates autonomously on
-   the device** between successive `INFORMATION_LOAD` polls, as opposed to being
-   controlled by a request field neither app happens to set deliberately. If it turns
-   out to need explicit selection instead, the poll loop needs a page-selector byte
-   added to `buildStatusRequest`.
-3. **The bulk `USERDATA_LOAD` response's exact total length** (used here for the
-   read-only preset names — see [above](#preset-names-userdata_load-read-only)). Two
-   different pieces of the Windows GUI's own source disagree by one byte on this; this
-   project went with the more directly-supported derivation. Fails safe either way — a
-   wrong guess just times out and the UI keeps showing "P1"–"P4" — so confirming this
-   is a nice-to-have, not a functional blocker.
+   the device** between successive `INFORMATION_LOAD` polls, as opposed to depending
+   on the echoed status byte in the request — which only starts reflecting real
+   device state once a poll has successfully parsed at least once, so this couldn't be
+   properly exercised until the checksum/length fix above. If it turns out to need
+   explicit selection instead, the poll loop needs a page-selector byte added to
+   `buildStatusRequest`.
 
-All are one-line fixes once confirmed; see the `ASSUMPTION`/doc comments in
-`protocol/src/main/kotlin/dev/x3n0n10/mosconibt/protocol/MosconiProtocol.kt`.
+See the doc comments in
+`protocol/src/main/kotlin/dev/x3n0n10/mosconibt/protocol/MosconiProtocol.kt` for the
+code-level detail behind each.

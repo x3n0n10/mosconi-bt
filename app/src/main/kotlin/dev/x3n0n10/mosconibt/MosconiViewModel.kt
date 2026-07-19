@@ -228,6 +228,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         val status = MosconiProtocol.parseStatusResponse(response.map { it.toInt() and 0xFF }.toIntArray())
         if (status == null) {
             Log.d(TAG, "pollStatusOnce: got ${response.size} bytes but parseStatusResponse rejected them")
+            bluetooth.drainStrayInput()
             return
         }
         lastStatusByte = status.statusByte

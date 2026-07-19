@@ -15,20 +15,24 @@ package dev.x3n0n10.mosconibt.protocol
  * other (identical command bytes, byte offsets, and defaults) is what gives this
  * confidence - see PROTOCOL.md for the full derivation.
  *
- * No live capture against real hardware was done for either side. Remaining
- * ASSUMPTIONS to verify against a real unit:
+ * The read side was live-tested against a real PICO V2 6|8 and needed two corrections
+ * from the original decompiled-only guesses: response frames are 1 byte longer than
+ * first assumed (a `0x0D` terminator precedes the checksum, mirroring how request
+ * frames are built), and - contrary to every request in this protocol - response
+ * checksums are a plain byte-sum mod 256, not [Crc8]. See [Sum8] and PROTOCOL.md.
+ *
+ * Remaining ASSUMPTIONS still to verify against real hardware:
  *  - Which end of the volume slider is loud vs. quiet ([LOG_VOLUME_TABLE] order).
  *  - Whether [StatusResponse]'s "page toggle" bit really alternates
- *    autonomously on the device between successive status polls (this project
- *    never sends a page selector, matching what the Windows app does).
- *  - The exact total length of a [buildUserDataRequest] response ([userDataResponseSize]),
- *    used only for the read-only custom preset names - fails safe if wrong (the read
- *    times out and the UI falls back to plain "P1".."P4" labels).
+ *    autonomously on the device between successive status polls, as opposed to
+ *    depending on the echoed status byte in the request (which only starts
+ *    reflecting real device state once a poll has successfully parsed once).
  *
  * Transport: classic Bluetooth RFCOMM/SPP (NOT BLE) using the standard SPP UUID.
  * Write frames (the `0x08`-prefixed short format) carry no checksum and get a
- * single ack byte back that's never validated. Read frames (the `0x07`-prefixed
- * format used for [buildStatusRequest]) are checksummed with [Crc8].
+ * single ack byte back that's never validated. Read *requests* (the `0x07`-prefixed
+ * format used for [buildStatusRequest]) are checksummed with [Crc8]; read *responses*
+ * are checksummed with [Sum8] instead.
  */
 object MosconiProtocol {
 
@@ -156,8 +160,8 @@ object MosconiProtocol {
     private const val CMD_STATUS_RESPONSE: Int = 0xE9 // 233
     private const val FRAME_TERMINATOR: Int = 0x0D // CR
 
-    /** Total bytes of a status *response* frame: 4 header + 20 data + 1 checksum. */
-    const val STATUS_RESPONSE_SIZE: Int = 25
+    /** Total bytes of a status *response* frame: 4 header + 20 data + terminator + checksum. */
+    const val STATUS_RESPONSE_SIZE: Int = 26
 
     /**
      * Builds the 6-byte "give me your current status" request frame (checksummed with
@@ -204,16 +208,17 @@ object MosconiProtocol {
 
     /**
      * Parses a [STATUS_RESPONSE_SIZE]-byte response to [buildStatusRequest]. Returns null if
-     * the frame doesn't look like a status response (wrong length/command byte) or the
-     * checksum doesn't match.
+     * the frame doesn't look like a status response (wrong length/command byte), the
+     * terminator is missing, or the checksum doesn't match.
      */
     fun parseStatusResponse(frame: IntArray): StatusResponse? {
         if (frame.size != STATUS_RESPONSE_SIZE) return null
         if (frame[0] != CMD_STATUS_FAMILY || frame[1] != CMD_STATUS_RESPONSE) return null
+        if (frame[STATUS_RESPONSE_SIZE - 2] != FRAME_TERMINATOR) return null
 
         val payload = frame.copyOfRange(0, STATUS_RESPONSE_SIZE - 1)
         val checksum = frame[STATUS_RESPONSE_SIZE - 1]
-        if (Crc8.calculate(payload) != checksum) return null
+        if (Sum8.calculate(payload) != checksum) return null
 
         val statusByte = frame[3]
         val preset = statusByte and 0x03
@@ -266,10 +271,6 @@ object MosconiProtocol {
      * backed settings) memory starting at [address], e.g. [PRESET_NAME_ADDRESS] with
      * [PRESET_NAME_COUNT]. Response size/shape is [userDataResponseSize]; parse it with
      * [parseUserDataResponse].
-     *
-     * ASSUMPTION: reverse-engineered from the Windows GUI's `USERDATA_LOAD` request
-     * builder - never captured live against real hardware. See PROTOCOL.md for what's
-     * still unconfirmed about the response side.
      */
     fun buildUserDataRequest(address: Int, count: Int, lastStatusByte: Int = 0): IntArray {
         val payload = intArrayOf(
@@ -288,27 +289,26 @@ object MosconiProtocol {
 
     /**
      * Total wire bytes of the response to a [buildUserDataRequest] for [count]: an
-     * 8-byte header, `count + 1` payload bytes, and a trailing CRC-8.
-     *
-     * ASSUMPTION: derived from how the Windows GUI's `EEPROM_DATEN_RECEIVE` indexes the
-     * payload it copies out of the response (bytes 9..9+count, 1-indexed), not from a
-     * live capture - the GUI's own receive-buffering code disagreed with itself by
-     * exactly one byte on this, and there's no way to resolve that without hardware. If
-     * a real device's response is one byte longer than this, add 1 here; everything
-     * else (payload offsets, CRC coverage) stays the same.
+     * 8-byte header, `count + 1` payload bytes, a `0x0D` terminator, and a trailing
+     * [Sum8] checksum - confirmed against a real device's status responses, which use
+     * the same [header..., terminator, checksum] shape (see [parseStatusResponse]) and
+     * happen to match the length this formula already gave (`count + 11`), so it's
+     * carried over here with the same confidence rather than re-verified byte-by-byte
+     * for this specific request.
      */
-    fun userDataResponseSize(count: Int): Int = count + 10
+    fun userDataResponseSize(count: Int): Int = count + 11
 
     /**
-     * Validates and unwraps a [buildUserDataRequest] response: checks the CRC-8 and
-     * that the echoed selector/address/count match what was asked for, then returns
-     * just the payload (`count + 1` bytes). Returns null on any mismatch - including a
-     * wrong guess about [userDataResponseSize] - so a framing error fails quietly
-     * rather than risk handing back misaligned bytes.
+     * Validates and unwraps a [buildUserDataRequest] response: checks the terminator
+     * and [Sum8] checksum, and that the echoed selector/address/count match what was
+     * asked for, then returns just the payload (`count + 1` bytes). Returns null on any
+     * mismatch - including a wrong guess about [userDataResponseSize] - so a framing
+     * error fails quietly rather than risk handing back misaligned bytes.
      */
     fun parseUserDataResponse(frame: IntArray, address: Int, count: Int): IntArray? {
         if (frame.size != userDataResponseSize(count)) return null
-        if (Crc8.calculate(frame.copyOfRange(0, frame.size - 1)) != frame.last()) return null
+        if (frame[frame.size - 2] != FRAME_TERMINATOR) return null
+        if (Sum8.calculate(frame.copyOfRange(0, frame.size - 1)) != frame.last()) return null
         if (frame[0] != CMD_STATUS_FAMILY || frame[1] != CMD_USERDATA_RESPONSE) return null
         val addressHigh = (address ushr 8) and 0xFF
         val addressLow = address and 0xFF
@@ -341,9 +341,27 @@ object MosconiProtocol {
     }
 
     /**
+     * Plain sum of every byte, masked to 0..255. Confirmed against a real device: every
+     * response frame in this protocol ([parseStatusResponse], [parseUserDataResponse])
+     * is checksummed this way, *not* with [Crc8] - despite every request using CRC-8.
+     * Reconstructed from a live capture (concatenating consecutive under-read status
+     * responses back into whole frames revealed this immediately; CRC-8 never matched,
+     * a byte sum matched every single frame tried).
+     */
+    object Sum8 {
+        fun calculate(payload: IntArray): Int {
+            var sum = 0
+            for (b in payload) sum += b
+            return sum and 0xFF
+        }
+    }
+
+    /**
      * CRC-8 (poly 0x31, "Dallas/Maxim" table form) as implemented by the Windows GUI's
      * `CRC_CALC_COM`. Table transcribed verbatim - not re-derived from the polynomial -
-     * to guarantee it matches the firmware bit-for-bit.
+     * to guarantee it matches the firmware bit-for-bit. Used for every *request* this
+     * protocol sends ([buildStatusRequest], [buildUserDataRequest]) - responses use
+     * [Sum8] instead, confirmed against real hardware.
      */
     object Crc8 {
         private val TABLE = intArrayOf(

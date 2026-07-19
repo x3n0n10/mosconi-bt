@@ -98,6 +98,13 @@ class MosconiProtocolTest {
     }
 
     @Test
+    fun `sum8 wraps at 256 and matches a hand-computed value`() {
+        assertEquals(45, MosconiProtocol.Sum8.calculate(intArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9)))
+        assertEquals(0, MosconiProtocol.Sum8.calculate(intArrayOf(0xFF, 1))) // 256 wraps to 0
+        assertEquals(0xFE, MosconiProtocol.Sum8.calculate(intArrayOf(0xFF, 0xFF))) // 510 -> 0xFE
+    }
+
+    @Test
     fun `buildStatusRequest has the expected header and a self-consistent checksum`() {
         val frame = MosconiProtocol.buildStatusRequest()
         assertEquals(6, frame.size)
@@ -117,8 +124,8 @@ class MosconiProtocolTest {
         info[9] = 50 // INFORMATION[10]: fader raw (48+2)
         info[10] = 9 // INFORMATION[11]: sub level
 
-        val frame = intArrayOf(0x07, 0xE9, 0, statusByte, *info)
-        val withChecksum = frame + MosconiProtocol.Crc8.calculate(frame)
+        val frame = intArrayOf(0x07, 0xE9, 0, statusByte, *info, 0x0D)
+        val withChecksum = frame + MosconiProtocol.Sum8.calculate(frame)
 
         val parsed = assertNotNull(MosconiProtocol.parseStatusResponse(withChecksum))
         assertEquals(1, parsed.preset) // 0-indexed: (0x11 and 3) = 1 -> preset P2
@@ -138,8 +145,8 @@ class MosconiProtocolTest {
         info[9] = 12 // INFORMATION[10]: mid
         info[10] = 15 // INFORMATION[11]: treble
 
-        val frame = intArrayOf(0x07, 0xE9, 0, 0x00, *info)
-        val withChecksum = frame + MosconiProtocol.Crc8.calculate(frame)
+        val frame = intArrayOf(0x07, 0xE9, 0, 0x00, *info, 0x0D)
+        val withChecksum = frame + MosconiProtocol.Sum8.calculate(frame)
 
         val parsed = assertNotNull(MosconiProtocol.parseStatusResponse(withChecksum))
         val page = assertNotNull(parsed.page as? MosconiProtocol.InformationPage.Tone)
@@ -149,15 +156,37 @@ class MosconiProtocolTest {
     }
 
     @Test
-    fun `parseStatusResponse rejects wrong length, wrong header, and bad checksum`() {
+    fun `parseStatusResponse decodes a real captured frame from a PICO V2 6-8`() {
+        // Reconstructed from an actual live capture (see PROTOCOL.md) - this is what
+        // exposed both the missing terminator byte and the CRC-8-vs-Sum8 mixup, so it's
+        // kept as a real-hardware regression anchor rather than only synthetic frames.
+        val frame = intArrayOf(
+            0x07, 0xE9, 0x02, 0xFA, 0x00, 0x02, 0x02, 0x02, 0xFF, 0x80, 0x86, 0x00, 0x09, 0x07,
+            0x07, 0x00, 0x00, 0xB9, 0xBF, 0xBD, 0x73, 0x1E, 0x00, 0x00, 0x0D, 0xE1,
+        )
+        val parsed = assertNotNull(MosconiProtocol.parseStatusResponse(frame))
+        assertEquals(0xFA, parsed.statusByte)
+        assertEquals(2, parsed.preset)
+        assertEquals(35, parsed.volumeStep) // raw 0 -> quietest end of LOG_VOLUME_TABLE
+        val page = assertNotNull(parsed.page as? MosconiProtocol.InformationPage.Tone)
+        assertEquals(9, page.bass)
+        assertEquals(7, page.mid)
+        assertEquals(7, page.treble)
+    }
+
+    @Test
+    fun `parseStatusResponse rejects wrong length, wrong header, missing terminator, and bad checksum`() {
         val info = IntArray(20)
-        val goodFrame = intArrayOf(0x07, 0xE9, 0, 0, *info)
-        val withGoodChecksum = goodFrame + MosconiProtocol.Crc8.calculate(goodFrame)
+        val goodFrame = intArrayOf(0x07, 0xE9, 0, 0, *info, 0x0D)
+        val withGoodChecksum = goodFrame + MosconiProtocol.Sum8.calculate(goodFrame)
 
         assertNull(MosconiProtocol.parseStatusResponse(withGoodChecksum.copyOf(10))) // wrong length
         assertNull(
             MosconiProtocol.parseStatusResponse(withGoodChecksum.copyOf().also { it[1] = 0x00 }),
         ) // wrong header
+        assertNull(
+            MosconiProtocol.parseStatusResponse(withGoodChecksum.copyOf().also { it[it.size - 2] = 0x00 }),
+        ) // missing terminator
         assertNull(
             MosconiProtocol.parseStatusResponse(
                 withGoodChecksum.copyOf().also { it[it.size - 1] = it[it.size - 1] xor 0xFF },
@@ -182,15 +211,16 @@ class MosconiProtocolTest {
             0x07, 0xC5, 0, 0x10, 0xA2,
             (address ushr 8) and 0xFF, address and 0xFF, count,
             *payload,
+            0x0D,
         )
-        val withChecksum = frame + MosconiProtocol.Crc8.calculate(frame)
+        val withChecksum = frame + MosconiProtocol.Sum8.calculate(frame)
 
         val parsed = assertNotNull(MosconiProtocol.parseUserDataResponse(withChecksum, address, count))
         assertEquals(payload.toList(), parsed.toList())
     }
 
     @Test
-    fun `parseUserDataResponse rejects wrong length, wrong echoed address, and bad checksum`() {
+    fun `parseUserDataResponse rejects wrong length, wrong echoed address, missing terminator, and bad checksum`() {
         val address = MosconiProtocol.PRESET_NAME_ADDRESS
         val count = MosconiProtocol.PRESET_NAME_COUNT
         val payload = IntArray(count + 1)
@@ -198,8 +228,9 @@ class MosconiProtocolTest {
             0x07, 0xC5, 0, 0, 0xA2,
             (address ushr 8) and 0xFF, address and 0xFF, count,
             *payload,
+            0x0D,
         )
-        val withGoodChecksum = goodFrame + MosconiProtocol.Crc8.calculate(goodFrame)
+        val withGoodChecksum = goodFrame + MosconiProtocol.Sum8.calculate(goodFrame)
 
         assertNull(MosconiProtocol.parseUserDataResponse(withGoodChecksum.copyOf(10), address, count)) // wrong length
         assertNull(
@@ -209,6 +240,13 @@ class MosconiProtocolTest {
                 count,
             ),
         ) // wrong echoed address
+        assertNull(
+            MosconiProtocol.parseUserDataResponse(
+                withGoodChecksum.copyOf().also { it[it.size - 2] = 0x00 },
+                address,
+                count,
+            ),
+        ) // missing terminator
         assertNull(
             MosconiProtocol.parseUserDataResponse(
                 withGoodChecksum.copyOf().also { it[it.size - 1] = it[it.size - 1] xor 0xFF },
