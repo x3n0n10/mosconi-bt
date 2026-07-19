@@ -6,9 +6,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -28,9 +30,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.vectorResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -39,15 +44,23 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.x3n0n10.mosconibt.bluetooth.BtConnectionState
 import dev.x3n0n10.mosconibt.ui.screens.ConnectScreen
 import dev.x3n0n10.mosconibt.ui.screens.ControlScreen
+import dev.x3n0n10.mosconibt.ui.screens.SettingsScreen
 import dev.x3n0n10.mosconibt.ui.theme.MosconiTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MosconiTheme {
+            val viewModel: MosconiViewModel = viewModel()
+            val ui by viewModel.ui.collectAsStateWithLifecycle()
+            val darkTheme = when (ui.themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            MosconiTheme(darkTheme = darkTheme) {
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    MosconiApp()
+                    MosconiApp(viewModel = viewModel, ui = ui)
                 }
             }
         }
@@ -59,12 +72,15 @@ private fun hasBluetoothConnectPermission(context: Context): Boolean {
     return context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 }
 
+private enum class AppScreen { Main, Settings }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MosconiApp(viewModel: MosconiViewModel = viewModel()) {
+fun MosconiApp(viewModel: MosconiViewModel, ui: ControlUiState) {
     val context = LocalContext.current
-    val ui by viewModel.ui.collectAsStateWithLifecycle()
     var hasPermission by remember { mutableStateOf(hasBluetoothConnectPermission(context)) }
+    var screen by rememberSaveable { mutableStateOf(AppScreen.Main) }
+    BackHandler(enabled = screen == AppScreen.Settings) { screen = AppScreen.Main }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -103,11 +119,18 @@ fun MosconiApp(viewModel: MosconiViewModel = viewModel()) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(topBarTitle(ui.connection)) },
+                title = { Text(if (screen == AppScreen.Settings) "Settings" else topBarTitle(ui.connection)) },
                 navigationIcon = {
-                    if (ui.isConnected) {
-                        IconButton(onClick = { viewModel.disconnect() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Disconnect")
+                    if (screen == AppScreen.Settings) {
+                        IconButton(onClick = { screen = AppScreen.Main }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
+                actions = {
+                    if (screen == AppScreen.Main) {
+                        IconButton(onClick = { screen = AppScreen.Settings }) {
+                            Icon(ImageVector.vectorResource(R.drawable.ic_settings), contentDescription = "Settings")
                         }
                     }
                 },
@@ -116,8 +139,21 @@ fun MosconiApp(viewModel: MosconiViewModel = viewModel()) {
         },
     ) { padding ->
         Surface(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (ui.isConnected) {
-                ControlScreen(
+            when {
+                screen == AppScreen.Settings -> {
+                    val rememberedDeviceLabel = ui.rememberedDeviceAddress?.let { address ->
+                        ui.pairedDevices.firstOrNull { it.address == address }?.name ?: address
+                    }
+                    SettingsScreen(
+                        hapticFeedback = ui.hapticFeedback,
+                        themeMode = ui.themeMode,
+                        rememberedDeviceLabel = rememberedDeviceLabel,
+                        onHapticToggle = viewModel::onHapticFeedbackToggle,
+                        onThemeModeChange = viewModel::onThemeModeChange,
+                        onForgetDevice = { viewModel.forgetDevice() },
+                    )
+                }
+                ui.isConnected -> ControlScreen(
                     state = ui,
                     onVolumeChange = viewModel::onVolumeChange,
                     onVolumeTargetChange = viewModel::onVolumeTargetChange,
@@ -128,10 +164,8 @@ fun MosconiApp(viewModel: MosconiViewModel = viewModel()) {
                     onMidChange = viewModel::onMidChange,
                     onBassChange = viewModel::onBassChange,
                     onPresetSelected = viewModel::onPresetSelected,
-                    onHapticToggle = viewModel::onHapticFeedbackToggle,
                 )
-            } else {
-                ConnectScreen(
+                else -> ConnectScreen(
                     devices = ui.pairedDevices,
                     connectionState = ui.connection,
                     isAutoConnecting = ui.isAutoConnecting,

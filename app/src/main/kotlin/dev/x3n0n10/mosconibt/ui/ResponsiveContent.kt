@@ -3,6 +3,8 @@ package dev.x3n0n10.mosconibt.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,14 +27,30 @@ private val MAX_CONTENT_WIDTH = 520.dp
  * a phone in a very wide split-screen pane): without a cap, Material sliders stretch
  * edge-to-edge and become awkward to use precisely. It's a no-op on ordinary portrait,
  * multi-window, and foldable/tablet layouts narrower than the cap.
+ *
+ * When [scrollable] is true, the vertical-scroll gesture is attached to the *outer*,
+ * full-width container rather than something inside the width-capped column - so on a
+ * screen wide enough for the cap to kick in, dragging anywhere in the empty margin
+ * beside the content scrolls it too, not just drags started directly over it. Callers
+ * that manage their own scrolling internally (e.g. a `LazyColumn`) should leave this
+ * false, since nesting two same-orientation scroll containers doesn't work.
  */
 @Composable
 fun ResponsiveContent(
     modifier: Modifier = Modifier,
+    scrollable: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        Box(modifier = Modifier.widthIn(max = MAX_CONTENT_WIDTH).fillMaxSize()) {
+    val outerModifier = if (scrollable) {
+        modifier.fillMaxSize().verticalScroll(rememberScrollState())
+    } else {
+        modifier.fillMaxSize()
+    }
+    Box(modifier = outerModifier, contentAlignment = Alignment.TopCenter) {
+        val innerModifier = Modifier.widthIn(max = MAX_CONTENT_WIDTH).let {
+            if (scrollable) it else it.fillMaxSize()
+        }
+        Box(modifier = innerModifier) {
             content()
         }
     }

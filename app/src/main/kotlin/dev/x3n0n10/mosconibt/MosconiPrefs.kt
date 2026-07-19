@@ -4,6 +4,9 @@ import android.content.Context
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import kotlin.reflect.KProperty
 
+/** Whether the app follows the system light/dark setting or overrides it. */
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
 /**
  * Tiny SharedPreferences-backed store for "last known" control positions, mirroring
  * the factory app's use of App Inventor's TinyDB to restore slider positions on launch.
@@ -30,6 +33,9 @@ class MosconiPrefs(context: Context) {
     var hapticFeedback: Boolean
         get() = prefs.getBoolean(KEY_HAPTIC, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTIC, value).apply()
+    var themeMode: ThemeMode
+        get() = ThemeMode.entries.getOrElse(prefs.getInt(KEY_THEME_MODE, ThemeMode.SYSTEM.ordinal)) { ThemeMode.SYSTEM }
+        set(value) = prefs.edit().putInt(KEY_THEME_MODE, value.ordinal).apply()
     var lastDeviceAddress: String?
         get() = prefs.getString(KEY_LAST_DEVICE, null)
         set(value) = prefs.edit().putString(KEY_LAST_DEVICE, value).apply()
@@ -52,6 +58,7 @@ class MosconiPrefs(context: Context) {
         const val KEY_BASS = "bass"
         const val KEY_PRESET = "preset"
         const val KEY_HAPTIC = "haptic"
+        const val KEY_THEME_MODE = "theme_mode"
         const val KEY_LAST_DEVICE = "last_device_address"
     }
 }

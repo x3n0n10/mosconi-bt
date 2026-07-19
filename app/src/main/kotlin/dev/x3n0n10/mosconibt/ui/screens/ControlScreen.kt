@@ -6,24 +6,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,21 +51,14 @@ fun ControlScreen(
     onMidChange: (Int) -> Unit,
     onBassChange: (Int) -> Unit,
     onPresetSelected: (Int) -> Unit,
-    onHapticToggle: (Boolean) -> Unit,
 ) {
     // DSP-affecting controls stay disabled until the app actually knows the device's real
     // values - editing before that would start from a guess (restored prefs, or hardcoded
-    // defaults) and could silently overwrite whatever the device was really set to. The
-    // haptic-feedback switch below is local-only and isn't gated by this.
+    // defaults) and could silently overwrite whatever the device was really set to.
     val controlsEnabled = state.controlsReady
 
-    ResponsiveContent {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-        ) {
+    ResponsiveContent(scrollable = true) {
+        Column(modifier = Modifier.padding(24.dp)) {
             SyncStatusRow(
                 lastSyncedAtMillis = state.lastSyncedAtMillis,
                 lastLocalEditAtMillis = state.lastLocalEditAtMillis,
@@ -157,24 +145,6 @@ fun ControlScreen(
                 enabled = controlsEnabled,
                 onValueChange = onVolumeChange,
             )
-
-            Spacer(Modifier.height(28.dp))
-            HorizontalDivider()
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text("Touch feedback", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Vibrate briefly when a control changes",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = state.hapticFeedback, onCheckedChange = onHapticToggle)
-            }
         }
     }
 }

@@ -12,6 +12,7 @@ import dev.x3n0n10.mosconibt.bluetooth.BtDevice
 import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.screens.ConnectScreen
 import dev.x3n0n10.mosconibt.ui.screens.ControlScreen
+import dev.x3n0n10.mosconibt.ui.screens.SettingsScreen
 import dev.x3n0n10.mosconibt.ui.theme.MosconiTheme
 import org.junit.Rule
 import org.junit.Test
@@ -125,7 +126,6 @@ class ScreenshotTest {
                     onMidChange = {},
                     onBassChange = {},
                     onPresetSelected = {},
-                    onHapticToggle = {},
                 )
             }
         }
@@ -146,7 +146,6 @@ class ScreenshotTest {
                     onMidChange = {},
                     onBassChange = {},
                     onPresetSelected = {},
-                    onHapticToggle = {},
                 )
             }
         }
@@ -168,7 +167,38 @@ class ScreenshotTest {
                     onMidChange = {},
                     onBassChange = {},
                     onPresetSelected = {},
+                )
+            }
+        }
+    }
+
+    @Test
+    fun settingsScreen_withRememberedDevice() {
+        paparazzi.snapshot {
+            AppRoot {
+                SettingsScreen(
+                    hapticFeedback = true,
+                    themeMode = ThemeMode.SYSTEM,
+                    rememberedDeviceLabel = "MOSCONI PICO 6|8",
                     onHapticToggle = {},
+                    onThemeModeChange = {},
+                    onForgetDevice = {},
+                )
+            }
+        }
+    }
+
+    @Test
+    fun settingsScreen_noRememberedDevice() {
+        paparazzi.snapshot {
+            AppRoot {
+                SettingsScreen(
+                    hapticFeedback = false,
+                    themeMode = ThemeMode.DARK,
+                    rememberedDeviceLabel = null,
+                    onHapticToggle = {},
+                    onThemeModeChange = {},
+                    onForgetDevice = {},
                 )
             }
         }
@@ -209,7 +239,6 @@ class ScreenshotTestWideScreen {
                     onMidChange = {},
                     onBassChange = {},
                     onPresetSelected = {},
-                    onHapticToggle = {},
                 )
             }
         }

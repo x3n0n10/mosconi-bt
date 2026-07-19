@@ -39,6 +39,12 @@ data class ControlUiState(
     val bass: Int = 8,
     val selectedPreset: Int = 0,
     val hapticFeedback: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** Address of the device auto-connect will try next launch, or null if none is
+     *  remembered (never connected yet, or [MosconiViewModel.forgetDevice] cleared it).
+     *  Kept in UI state (rather than read straight from prefs) so the settings screen's
+     *  "forget device" affordance can reactively show/hide itself. */
+    val rememberedDeviceAddress: String? = null,
     /** Custom preset names as set in the Windows tuning GUI (read-only here - this app
      *  never writes them). A null slot means no custom name is set on the device, or it
      *  hasn't been read yet; the UI should fall back to a generic "P<n>" label. */
@@ -86,6 +92,8 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
             bass = prefs.bass,
             selectedPreset = prefs.selectedPreset,
             hapticFeedback = prefs.hapticFeedback,
+            themeMode = prefs.themeMode,
+            rememberedDeviceAddress = prefs.lastDeviceAddress,
         ),
     )
     val ui: StateFlow<ControlUiState> = _ui.asStateFlow()
@@ -314,6 +322,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
                 lastLocalEditAtMillis = null,
                 isAutoConnecting = automatic,
                 presetNames = List(MosconiProtocol.PRESET_COUNT) { null },
+                rememberedDeviceAddress = device.address,
             )
         }
         connectJob = viewModelScope.launch { bluetooth.connect(device) }
@@ -331,6 +340,21 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
                 presetNames = List(MosconiProtocol.PRESET_COUNT) { null },
             )
         }
+    }
+
+    /** Disconnects (if connected) and stops auto-connect from ever picking this device
+     *  back up - unlike [disconnect], which just tears down the current session but
+     *  leaves the device remembered for next launch. */
+    fun forgetDevice() {
+        autoConnectSuppressed = true
+        prefs.lastDeviceAddress = null
+        disconnect()
+        _ui.update { it.copy(rememberedDeviceAddress = null) }
+    }
+
+    fun onThemeModeChange(mode: ThemeMode) {
+        prefs.themeMode = mode
+        _ui.update { it.copy(themeMode = mode) }
     }
 
     fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {
