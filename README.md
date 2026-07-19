@@ -121,6 +121,28 @@ an update signed with a different key over an existing install, so losing it mea
 every future release is a fresh reinstall (losing all local prefs) rather than an
 in-place update — there's no recovery path if it's gone.
 
+### Building a signed release APK via GitHub Actions
+
+The [Release workflow](.github/workflows/release.yml) does the same
+`:app:assembleRelease` build above, but on a GitHub-hosted runner instead of your own
+machine - handy if you'd rather not keep an Android SDK installed locally. It's
+manual-only (`workflow_dispatch`), never runs on a push, and only ever uploads a build
+artifact to that one workflow run - it doesn't publish anywhere.
+
+One-time setup, using the same keystore from the section above:
+
+1. Base64-encode the keystore file: `base64 -w0 mosconi-bt-release.keystore` (Linux) or
+   `base64 -i mosconi-bt-release.keystore` (macOS).
+2. In the repo's **Settings → Secrets and variables → Actions**, add four repository
+   secrets: `RELEASE_KEYSTORE_BASE64` (the output of step 1),
+   `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` - the same
+   values as the `local.properties` keys above.
+
+Then, from the **Actions** tab, select **Release** → **Run workflow**. The signed
+`app-release.apk` shows up under that run's **Artifacts** once it finishes (kept for 90
+days). The keystore only ever exists on the ephemeral runner's disk for the duration of
+that one job; nothing is written back to the repo.
+
 Open the project root in Android Studio (Koala or newer) and it will pick up both
 modules automatically. `:app` needs `compileSdk 34` / a recent Android SDK installed
 via Android Studio's SDK Manager.
