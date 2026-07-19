@@ -35,10 +35,10 @@ whatever the device actually had. Once synced, editing a control pauses applying
 reads for a few seconds (extended for as long as you keep dragging), so an in-flight
 poll response can't yank a slider back to the old value mid-adjustment.
 
-On an unusually wide/short screen (e.g. a fixed car head unit), content width is capped to
-the screen height instead of stretching sliders edge-to-edge:
+On an unusually wide/short screen (e.g. a fixed car head unit), content width is capped
+at 520dp instead of stretching sliders edge-to-edge:
 
-![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTestWideScreen_controlScreen_ultraWideScreen_widthIsCappedToHeight.png)
+![](app/src/test/snapshots/images/dev.x3n0n10.mosconibt_ScreenshotTestWideScreen_controlScreen_ultraWideScreen_widthIsCapped.png)
 
 ## Project layout
 

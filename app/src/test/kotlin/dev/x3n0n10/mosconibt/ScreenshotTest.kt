@@ -184,7 +184,7 @@ class ScreenshotTestWideScreen {
     )
 
     @Test
-    fun controlScreen_ultraWideScreen_widthIsCappedToHeight() {
+    fun controlScreen_ultraWideScreen_widthIsCapped() {
         paparazzi.snapshot {
             AppRoot {
                 ControlScreen(
@@ -216,7 +216,7 @@ class ScreenshotTestWideScreen {
     }
 
     @Test
-    fun connectScreen_ultraWideScreen_widthIsCappedToHeight() {
+    fun connectScreen_ultraWideScreen_widthIsCapped() {
         paparazzi.snapshot {
             AppRoot {
                 ConnectScreen(
