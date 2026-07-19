@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -91,7 +92,7 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onBalanceChange,
-                showCenterMark = true,
+                centerValue = MosconiProtocol.BALANCE_FADER_STEPS / 2,
             )
             LabeledSlider(
                 label = "Fader (front ↔ rear)",
@@ -99,7 +100,7 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.BALANCE_FADER_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onFaderChange,
-                showCenterMark = true,
+                centerValue = MosconiProtocol.BALANCE_FADER_STEPS / 2,
             )
 
             Spacer(Modifier.height(28.dp))
@@ -110,6 +111,7 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.TONE_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onTrebleChange,
+                centerValue = FLAT_TONE_VALUE,
             )
             LabeledSlider(
                 label = "Mid",
@@ -117,6 +119,7 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.TONE_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onMidChange,
+                centerValue = FLAT_TONE_VALUE,
             )
             LabeledSlider(
                 label = "Bass",
@@ -124,6 +127,7 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.TONE_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onBassChange,
+                centerValue = FLAT_TONE_VALUE,
             )
 
             Spacer(Modifier.height(28.dp))
@@ -195,6 +199,11 @@ private fun SyncStatusRow(lastSyncedAtMillis: Long?, lastLocalEditAtMillis: Long
 /** Poll interval is 1s; two missed polls in a row is a meaningfully stale signal. */
 private const val STALE_AFTER_MILLIS = 3000L
 
+/** The DSP's "flat"/no-adjustment tone value - see the Tone frame docs in PROTOCOL.md.
+ *  Not the exact geometric center of 0..[MosconiProtocol.TONE_STEPS] (that's 7.5),
+ *  which is why [LabeledSlider]'s mark is positioned by value, not by fixed alignment. */
+private const val FLAT_TONE_VALUE = 8
+
 /**
  * [names] are the custom preset names read (read-only) from the DSP itself - see
  * [dev.x3n0n10.mosconibt.protocol.MosconiProtocol.parsePresetNames]. The four chips
@@ -252,7 +261,7 @@ private fun LabeledSlider(
     valueRange: IntRange,
     enabled: Boolean,
     onValueChange: (Int) -> Unit,
-    showCenterMark: Boolean = false,
+    centerValue: Int? = null,
 ) {
     val labelColor = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -272,15 +281,19 @@ private fun LabeledSlider(
                 steps = (valueRange.last - valueRange.first - 1).coerceAtLeast(0),
                 enabled = enabled,
             )
-            if (showCenterMark) {
-                // A landmark tick at the midpoint, not a snap point - Balance/Fader
-                // rest there by default, so it's worth being able to see (and land
-                // back on) without staring at the numeric readout above. Drawn on top
-                // of the slider so it only shows in the track's transparent margin -
-                // it visually "hides" under the thumb exactly when centered.
+            if (centerValue != null) {
+                // A landmark tick at this control's rest value, not a snap point -
+                // worth being able to see (and land back on) without staring at the
+                // numeric readout above. Drawn on top of the slider so it only shows
+                // in the track's transparent margin - it visually "hides" under the
+                // thumb exactly when the value matches. Positioned by value (not a
+                // fixed Alignment.Center) since it isn't always the exact midpoint -
+                // the tone controls' "flat" value of 8 sits slightly off-center in
+                // their 0..15 range.
+                val fraction = (centerValue - valueRange.first).toFloat() / (valueRange.last - valueRange.first)
                 Box(
                     modifier = Modifier
-                        .align(Alignment.Center)
+                        .align(BiasAlignment(horizontalBias = fraction * 2f - 1f, verticalBias = 0f))
                         .width(2.dp)
                         .height(16.dp)
                         .background(MaterialTheme.colorScheme.outline),
