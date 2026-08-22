@@ -29,8 +29,8 @@ data class ControlUiState(
      *  auto-connecting to the last-used device, as opposed to a device the user just
      *  tapped - lets the UI offer a way to cancel it, unlike a manual connect attempt. */
     val isAutoConnecting: Boolean = false,
-    val volumeTarget: MosconiProtocol.VolumeTarget = MosconiProtocol.VolumeTarget.OUTPUT,
-    val volumeStep: Int = MosconiProtocol.VOLUME_STEPS / 2,
+    val outputVolumeStep: Int = MosconiProtocol.VOLUME_STEPS / 2,
+    val inputVolumeStep: Int = MosconiProtocol.VOLUME_STEPS / 2,
     val subLevel: Int = MosconiProtocol.SUB_STEPS,
     val balance: Int = MosconiProtocol.BALANCE_FADER_STEPS / 2,
     val fader: Int = MosconiProtocol.BALANCE_FADER_STEPS / 2,
@@ -78,6 +78,14 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
     private var lastStatusByte: Int = 0
     private var presetNameFetchJob: Job? = null
 
+    /** Which volume "mode" (the write frame's TARGET flag) was most recently sent to the
+     *  device - used to attribute a status poll's single volume figure (see
+     *  [MosconiProtocol.StatusResponse.volumeStep]) to the right slider, since the DSP
+     *  only ever reports back one live volume value regardless of how many independent
+     *  registers it actually holds. Defaults to OUTPUT, matching the device's own
+     *  power-on default. */
+    private var activeVolumeTarget: MosconiProtocol.VolumeTarget = MosconiProtocol.VolumeTarget.OUTPUT
+
     private var connectJob: Job? = null
 
     /** Auto-connect is attempted at most once per foreground session (see
@@ -87,8 +95,8 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     private val _ui = MutableStateFlow(
         ControlUiState(
-            volumeTarget = prefs.volumeTarget,
-            volumeStep = prefs.volumeStep,
+            outputVolumeStep = prefs.outputVolumeStep,
+            inputVolumeStep = prefs.inputVolumeStep,
             subLevel = prefs.subLevel,
             balance = prefs.balance,
             fader = prefs.fader,
@@ -266,7 +274,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         val volumeControls = status.page as? MosconiProtocol.InformationPage.VolumeControls
         val tone = status.page as? MosconiProtocol.InformationPage.Tone
 
-        packetState.setVolume(_ui.value.volumeTarget, status.volumeStep)
+        packetState.setVolume(activeVolumeTarget, status.volumeStep)
         packetState.selectPreset(status.preset)
         volumeControls?.let {
             packetState.setBalance(it.balance)
@@ -281,7 +289,8 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
         _ui.update { current ->
             current.copy(
-                volumeStep = status.volumeStep,
+                outputVolumeStep = if (activeVolumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) status.volumeStep else current.outputVolumeStep,
+                inputVolumeStep = if (activeVolumeTarget == MosconiProtocol.VolumeTarget.INPUT) status.volumeStep else current.inputVolumeStep,
                 selectedPreset = status.preset,
                 balance = volumeControls?.balance ?: current.balance,
                 fader = volumeControls?.fader ?: current.fader,
@@ -294,7 +303,11 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         }
         // Persist so a relaunch starts from the DSP's real state, not a stale local guess.
         with(prefs) {
-            volumeStep = status.volumeStep
+            if (activeVolumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) {
+                outputVolumeStep = status.volumeStep
+            } else {
+                inputVolumeStep = status.volumeStep
+            }
             selectedPreset = status.preset
             volumeControls?.let {
                 balance = it.balance
@@ -373,17 +386,16 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {
-        prefs.volumeTarget = target
-        _ui.update { it.copy(volumeTarget = target) }
-        // Re-send the current volume step under the new target so the DSP's other
-        // channel doesn't keep stale gain until the slider is next touched.
-        onVolumeChange(_ui.value.volumeStep)
+    fun onOutputVolumeChange(step: Int) {
+        prefs.outputVolumeStep = step
+        activeVolumeTarget = MosconiProtocol.VolumeTarget.OUTPUT
+        updateAndSend({ it.copy(outputVolumeStep = step) }, packetState.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, step))
     }
 
-    fun onVolumeChange(step: Int) {
-        prefs.volumeStep = step
-        updateAndSend({ it.copy(volumeStep = step) }, packetState.setVolume(_ui.value.volumeTarget, step))
+    fun onInputVolumeChange(step: Int) {
+        prefs.inputVolumeStep = step
+        activeVolumeTarget = MosconiProtocol.VolumeTarget.INPUT
+        updateAndSend({ it.copy(inputVolumeStep = step) }, packetState.setVolume(MosconiProtocol.VolumeTarget.INPUT, step))
     }
 
     fun onSubChange(level: Int) {
@@ -440,8 +452,8 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     private fun replayRestoredStateIntoPacketBuilder() {
         val s = _ui.value
-        packetState.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, if (s.volumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) s.volumeStep else MosconiProtocol.VOLUME_STEPS / 2)
-        packetState.setVolume(MosconiProtocol.VolumeTarget.INPUT, if (s.volumeTarget == MosconiProtocol.VolumeTarget.INPUT) s.volumeStep else MosconiProtocol.VOLUME_STEPS / 2)
+        packetState.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, s.outputVolumeStep)
+        packetState.setVolume(MosconiProtocol.VolumeTarget.INPUT, s.inputVolumeStep)
         packetState.setSub(s.subLevel)
         packetState.setBalance(s.balance)
         packetState.setFader(s.fader)
