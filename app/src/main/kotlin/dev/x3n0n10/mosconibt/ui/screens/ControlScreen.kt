@@ -39,7 +39,6 @@ import kotlinx.coroutines.delay
 fun ControlScreen(
     state: ControlUiState,
     onOutputVolumeChange: (Int) -> Unit,
-    onInputVolumeChange: (Int) -> Unit,
     onSubChange: (Int) -> Unit,
     onBalanceChange: (Int) -> Unit,
     onFaderChange: (Int) -> Unit,
@@ -140,13 +139,6 @@ fun ControlScreen(
                 valueRange = 0..MosconiProtocol.VOLUME_STEPS,
                 enabled = controlsEnabled,
                 onValueChange = onOutputVolumeChange,
-            )
-            LabeledSlider(
-                label = "Input volume",
-                value = state.inputVolumeStep,
-                valueRange = 0..MosconiProtocol.VOLUME_STEPS,
-                enabled = controlsEnabled,
-                onValueChange = onInputVolumeChange,
             )
         }
     }

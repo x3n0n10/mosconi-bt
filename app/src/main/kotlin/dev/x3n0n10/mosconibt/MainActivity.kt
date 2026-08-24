@@ -160,7 +160,6 @@ fun MosconiApp(viewModel: MosconiViewModel, ui: ControlUiState) {
                 ui.isConnected -> ControlScreen(
                     state = ui,
                     onOutputVolumeChange = viewModel::onOutputVolumeChange,
-                    onInputVolumeChange = viewModel::onInputVolumeChange,
                     onSubChange = viewModel::onSubChange,
                     onBalanceChange = viewModel::onBalanceChange,
                     onFaderChange = viewModel::onFaderChange,

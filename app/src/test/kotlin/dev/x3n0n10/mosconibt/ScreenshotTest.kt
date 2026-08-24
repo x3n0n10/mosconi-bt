@@ -34,7 +34,6 @@ class ScreenshotTest {
     private val sampleControlState = ControlUiState(
         connection = BtConnectionState.Connected(sampleDevices[0]),
         outputVolumeStep = 24,
-        inputVolumeStep = 20,
         subLevel = 11,
         balance = 18,
         fader = 20,
@@ -117,7 +116,6 @@ class ScreenshotTest {
                 ControlScreen(
                     state = sampleControlState,
                     onOutputVolumeChange = {},
-                    onInputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -137,7 +135,6 @@ class ScreenshotTest {
                 ControlScreen(
                     state = sampleControlState,
                     onOutputVolumeChange = {},
-                    onInputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -158,7 +155,6 @@ class ScreenshotTest {
                     // lastSyncedAtMillis defaults to null: connected, but nothing read yet.
                     state = sampleControlState.copy(lastSyncedAtMillis = null),
                     onOutputVolumeChange = {},
-                    onInputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -178,7 +174,6 @@ class ScreenshotTest {
                 ControlScreen(
                     state = sampleControlState.copy(presetsEnabled = listOf(true, true, false, true)),
                     onOutputVolumeChange = {},
-                    onInputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -248,7 +243,6 @@ class ScreenshotTestWideScreen {
                     state = ControlUiState(
                         connection = BtConnectionState.Connected(BtDevice("MOSCONI PICO 6|8", "AA:BB:CC:11:22:33")),
                         outputVolumeStep = 24,
-                        inputVolumeStep = 20,
                         subLevel = 11,
                         balance = 18,
                         fader = 20,
@@ -259,7 +253,6 @@ class ScreenshotTestWideScreen {
                         lastSyncedAtMillis = System.currentTimeMillis() + 60_000L, // see comment above
                     ),
                     onOutputVolumeChange = {},
-                    onInputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
