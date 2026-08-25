@@ -116,7 +116,7 @@ two command families this is.
 | 4 | Balance (left↔right) | 48 + (0–32) → 48–80 | Balance slider |
 | 5 | Fader (front↔rear) | 48 + (32 − UI position) → 48–80 | Fader slider |
 | 6 | Preset index | 0–3 | Preset buttons P1–P4 |
-| 7 | Target flag | `0x00` = output volume, `0x80` = input/CAN-bus volume | Input/Output switch |
+| 7 | Target flag | `0x00` = output volume, `0x80` = input/CAN-bus volume | always `0x00` - see below |
 
 Byte 4/5 are **Balance and Fader** — the standard car-audio left/right and front/rear
 mix controls, not a "listening position" as originally guessed from the Android app
@@ -132,18 +132,24 @@ labeled "front ↔ rear" actually produces front, matching the label, rather tha
 rear. Balance needed no such flip. See `MosconiProtocol.State.setFader` and its
 matching read-side inversion in `parseStatusResponse`'s fader extraction.
 
-The app keeps **two independent 8-byte buffers** for this command — one for
-"output volume" mode (`TARGET=0x00`) and one for "input volume" mode (`TARGET=0x80`).
-Moving the Sub, Balance, Fader, or Preset controls always patches and resends the
-*output* buffer, regardless of which volume mode is currently selected; only the
-Volume slider itself decides which of the two buffers gets its byte 2 updated and
-sent. The input-mode buffer's other bytes are therefore always compile-time defaults
-and never meaningfully used — a quirk in the original app, reproduced exactly here for
-fidelity (see `MosconiProtocol.State`). ("Input/CAN volume" itself is for reflecting a
-factory head unit's steering-wheel volume control over the vehicle's CAN bus — the
-Windows GUI has a corresponding read-only `CAN_VOLUME` display fed by passively
-listening for these Android-style frames on the shared line, which is out of scope
-here.)
+`MosconiProtocol.State` (the protocol library) keeps **two independent 8-byte
+buffers** for this command — one for "output volume" mode (`TARGET=0x00`) and one
+for "input volume" mode (`TARGET=0x80`) — reproducing the original factory app's
+own behaviour faithfully: moving Sub, Balance, Fader, or Preset always patches and
+resends the *output* buffer regardless of which volume mode is selected, and only
+`setVolume` decides which of the two buffers gets its byte 2 updated and sent.
+
+This repo's Android app, however, only ever calls `setVolume(VolumeTarget.OUTPUT,
+...)` — it has no UI or code path that targets `TARGET=0x80` at all, so the
+input-mode buffer is built but never sent. ("Input/CAN volume" itself is for
+reflecting a factory head unit's steering-wheel volume control over the vehicle's
+CAN bus — the Windows GUI has a corresponding `CAN_VOLUME` display fed by
+listening for these Android-style frames on the shared line, out of scope here.
+An earlier revision of this app briefly exposed a second, independently-settable
+"Input volume" slider that wrote `TARGET=0x80` directly, but that was removed:
+hand-setting a value meant to passively mirror an external CAN signal isn't
+useful, so `VolumeTarget.INPUT` now exists in the protocol layer only for
+completeness/fidelity, not because the app uses it.)
 
 Defaults (before any control has been touched in a session): volume=`0`, sub=`15`,
 balance=`64`, fader=`64`, preset=`0`.

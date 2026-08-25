@@ -187,8 +187,11 @@ for the current list (volume slider direction, and whether the status response's
 ## Contributing back
 
 The current feature set covers what both the Android app (write) and the Windows GUI
-(read) exposed for: output/input volume, sub level, balance/fader, 4 presets, and
-treble/mid/bass. The Windows GUI's own memory-mapped bulk-read mechanism
+(read) exposed for: output volume, sub level, balance/fader, 4 presets, and
+treble/mid/bass. (The wire protocol also supports a second, input/CAN-bus volume
+target - see [PROTOCOL.md](PROTOCOL.md) - but it mirrors an external steering-wheel
+signal rather than something meant to be hand-set, so this app doesn't expose a
+control for it.) The Windows GUI's own memory-mapped bulk-read mechanism
 (`USERDATA_LOAD`, see PROTOCOL.md) covers a lot more than that — crossovers, a
 per-channel mixer matrix, effects, time alignment, etc. — none of which this app reads
 or writes. If you want one of those and can help pin down its exact byte offset/format
