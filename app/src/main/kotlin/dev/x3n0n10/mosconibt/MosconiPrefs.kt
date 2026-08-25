@@ -14,15 +14,7 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 class MosconiPrefs(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("mosconi_controls", Context.MODE_PRIVATE)
 
-    var volumeTarget: MosconiProtocol.VolumeTarget
-        get() = if (prefs.getBoolean(KEY_VOLUME_IS_INPUT, false)) {
-            MosconiProtocol.VolumeTarget.INPUT
-        } else {
-            MosconiProtocol.VolumeTarget.OUTPUT
-        }
-        set(value) = prefs.edit().putBoolean(KEY_VOLUME_IS_INPUT, value == MosconiProtocol.VolumeTarget.INPUT).apply()
-
-    var volumeStep: Int by IntPref(KEY_VOLUME_STEP, MosconiProtocol.VOLUME_STEPS / 2)
+    var outputVolumeStep: Int by IntPref(KEY_VOLUME_STEP, MosconiProtocol.VOLUME_STEPS / 2)
     var subLevel: Int by IntPref(KEY_SUB, MosconiProtocol.SUB_STEPS)
     var balance: Int by IntPref(KEY_BALANCE, MosconiProtocol.BALANCE_FADER_STEPS / 2)
     var fader: Int by IntPref(KEY_FADER, MosconiProtocol.BALANCE_FADER_STEPS / 2)
@@ -59,7 +51,6 @@ class MosconiPrefs(context: Context) {
     }
 
     private companion object {
-        const val KEY_VOLUME_IS_INPUT = "volume_is_input"
         const val KEY_VOLUME_STEP = "volume_step"
         const val KEY_SUB = "sub"
         const val KEY_BALANCE = "geo_x"

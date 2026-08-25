@@ -12,12 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,12 +35,10 @@ import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.ResponsiveContent
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ControlScreen(
     state: ControlUiState,
-    onVolumeChange: (Int) -> Unit,
-    onVolumeTargetChange: (MosconiProtocol.VolumeTarget) -> Unit,
+    onOutputVolumeChange: (Int) -> Unit,
     onSubChange: (Int) -> Unit,
     onBalanceChange: (Int) -> Unit,
     onFaderChange: (Int) -> Unit,
@@ -139,24 +133,12 @@ fun ControlScreen(
 
             Spacer(Modifier.height(28.dp))
             SectionLabel("Volume")
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                MosconiProtocol.VolumeTarget.entries.forEachIndexed { index, target ->
-                    SegmentedButton(
-                        selected = state.volumeTarget == target,
-                        onClick = { onVolumeTargetChange(target) },
-                        enabled = controlsEnabled,
-                        shape = SegmentedButtonDefaults.itemShape(index, MosconiProtocol.VolumeTarget.entries.size),
-                    ) {
-                        Text(if (target == MosconiProtocol.VolumeTarget.OUTPUT) "Output" else "Input")
-                    }
-                }
-            }
             LabeledSlider(
-                label = if (state.volumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) "Output volume" else "Input volume",
-                value = state.volumeStep,
+                label = "Output volume",
+                value = state.outputVolumeStep,
                 valueRange = 0..MosconiProtocol.VOLUME_STEPS,
                 enabled = controlsEnabled,
-                onValueChange = onVolumeChange,
+                onValueChange = onOutputVolumeChange,
             )
         }
     }

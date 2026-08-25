@@ -29,8 +29,7 @@ data class ControlUiState(
      *  auto-connecting to the last-used device, as opposed to a device the user just
      *  tapped - lets the UI offer a way to cancel it, unlike a manual connect attempt. */
     val isAutoConnecting: Boolean = false,
-    val volumeTarget: MosconiProtocol.VolumeTarget = MosconiProtocol.VolumeTarget.OUTPUT,
-    val volumeStep: Int = MosconiProtocol.VOLUME_STEPS / 2,
+    val outputVolumeStep: Int = MosconiProtocol.VOLUME_STEPS / 2,
     val subLevel: Int = MosconiProtocol.SUB_STEPS,
     val balance: Int = MosconiProtocol.BALANCE_FADER_STEPS / 2,
     val fader: Int = MosconiProtocol.BALANCE_FADER_STEPS / 2,
@@ -87,8 +86,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     private val _ui = MutableStateFlow(
         ControlUiState(
-            volumeTarget = prefs.volumeTarget,
-            volumeStep = prefs.volumeStep,
+            outputVolumeStep = prefs.outputVolumeStep,
             subLevel = prefs.subLevel,
             balance = prefs.balance,
             fader = prefs.fader,
@@ -266,7 +264,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         val volumeControls = status.page as? MosconiProtocol.InformationPage.VolumeControls
         val tone = status.page as? MosconiProtocol.InformationPage.Tone
 
-        packetState.setVolume(_ui.value.volumeTarget, status.volumeStep)
+        packetState.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, status.volumeStep)
         packetState.selectPreset(status.preset)
         volumeControls?.let {
             packetState.setBalance(it.balance)
@@ -281,7 +279,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
         _ui.update { current ->
             current.copy(
-                volumeStep = status.volumeStep,
+                outputVolumeStep = status.volumeStep,
                 selectedPreset = status.preset,
                 balance = volumeControls?.balance ?: current.balance,
                 fader = volumeControls?.fader ?: current.fader,
@@ -294,7 +292,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         }
         // Persist so a relaunch starts from the DSP's real state, not a stale local guess.
         with(prefs) {
-            volumeStep = status.volumeStep
+            outputVolumeStep = status.volumeStep
             selectedPreset = status.preset
             volumeControls?.let {
                 balance = it.balance
@@ -373,17 +371,9 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun onVolumeTargetChange(target: MosconiProtocol.VolumeTarget) {
-        prefs.volumeTarget = target
-        _ui.update { it.copy(volumeTarget = target) }
-        // Re-send the current volume step under the new target so the DSP's other
-        // channel doesn't keep stale gain until the slider is next touched.
-        onVolumeChange(_ui.value.volumeStep)
-    }
-
-    fun onVolumeChange(step: Int) {
-        prefs.volumeStep = step
-        updateAndSend({ it.copy(volumeStep = step) }, packetState.setVolume(_ui.value.volumeTarget, step))
+    fun onOutputVolumeChange(step: Int) {
+        prefs.outputVolumeStep = step
+        updateAndSend({ it.copy(outputVolumeStep = step) }, packetState.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, step))
     }
 
     fun onSubChange(level: Int) {
@@ -440,8 +430,7 @@ class MosconiViewModel(application: Application) : AndroidViewModel(application)
 
     private fun replayRestoredStateIntoPacketBuilder() {
         val s = _ui.value
-        packetState.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, if (s.volumeTarget == MosconiProtocol.VolumeTarget.OUTPUT) s.volumeStep else MosconiProtocol.VOLUME_STEPS / 2)
-        packetState.setVolume(MosconiProtocol.VolumeTarget.INPUT, if (s.volumeTarget == MosconiProtocol.VolumeTarget.INPUT) s.volumeStep else MosconiProtocol.VOLUME_STEPS / 2)
+        packetState.setVolume(MosconiProtocol.VolumeTarget.OUTPUT, s.outputVolumeStep)
         packetState.setSub(s.subLevel)
         packetState.setBalance(s.balance)
         packetState.setFader(s.fader)

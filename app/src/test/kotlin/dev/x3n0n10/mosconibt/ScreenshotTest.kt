@@ -9,7 +9,6 @@ import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import dev.x3n0n10.mosconibt.bluetooth.BtConnectionState
 import dev.x3n0n10.mosconibt.bluetooth.BtDevice
-import dev.x3n0n10.mosconibt.protocol.MosconiProtocol
 import dev.x3n0n10.mosconibt.ui.screens.ConnectScreen
 import dev.x3n0n10.mosconibt.ui.screens.ControlScreen
 import dev.x3n0n10.mosconibt.ui.screens.SettingsScreen
@@ -34,8 +33,7 @@ class ScreenshotTest {
 
     private val sampleControlState = ControlUiState(
         connection = BtConnectionState.Connected(sampleDevices[0]),
-        volumeTarget = MosconiProtocol.VolumeTarget.OUTPUT,
-        volumeStep = 24,
+        outputVolumeStep = 24,
         subLevel = 11,
         balance = 18,
         fader = 20,
@@ -117,8 +115,7 @@ class ScreenshotTest {
             AppRoot(darkTheme = false) {
                 ControlScreen(
                     state = sampleControlState,
-                    onVolumeChange = {},
-                    onVolumeTargetChange = {},
+                    onOutputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -137,8 +134,7 @@ class ScreenshotTest {
             AppRoot(darkTheme = true) {
                 ControlScreen(
                     state = sampleControlState,
-                    onVolumeChange = {},
-                    onVolumeTargetChange = {},
+                    onOutputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -158,8 +154,7 @@ class ScreenshotTest {
                 ControlScreen(
                     // lastSyncedAtMillis defaults to null: connected, but nothing read yet.
                     state = sampleControlState.copy(lastSyncedAtMillis = null),
-                    onVolumeChange = {},
-                    onVolumeTargetChange = {},
+                    onOutputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -178,8 +173,7 @@ class ScreenshotTest {
             AppRoot {
                 ControlScreen(
                     state = sampleControlState.copy(presetsEnabled = listOf(true, true, false, true)),
-                    onVolumeChange = {},
-                    onVolumeTargetChange = {},
+                    onOutputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
@@ -248,7 +242,7 @@ class ScreenshotTestWideScreen {
                 ControlScreen(
                     state = ControlUiState(
                         connection = BtConnectionState.Connected(BtDevice("MOSCONI PICO 6|8", "AA:BB:CC:11:22:33")),
-                        volumeStep = 24,
+                        outputVolumeStep = 24,
                         subLevel = 11,
                         balance = 18,
                         fader = 20,
@@ -258,8 +252,7 @@ class ScreenshotTestWideScreen {
                         selectedPreset = 1,
                         lastSyncedAtMillis = System.currentTimeMillis() + 60_000L, // see comment above
                     ),
-                    onVolumeChange = {},
-                    onVolumeTargetChange = {},
+                    onOutputVolumeChange = {},
                     onSubChange = {},
                     onBalanceChange = {},
                     onFaderChange = {},
